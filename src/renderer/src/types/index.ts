@@ -26,6 +26,7 @@ export type Assistant = {
   knowledgeRecognition?: 'off' | 'on'
   regularPhrases?: QuickPhrase[] // Added for regular phrase
   tags?: string[] // 助手标签
+  enableMemory?: boolean
 }
 
 export type AssistantsSortType = 'tags' | 'list'
@@ -699,11 +700,3 @@ export interface StoreSyncAction {
 
 export type OpenAISummaryText = 'auto' | 'concise' | 'detailed' | 'off'
 export type OpenAIServiceTier = 'auto' | 'default' | 'flex'
-
-export interface MemoryConfig {
-  embedderModel?: Model
-  embedderDimensions?: number
-  llmModel?: Model
-  customFactExtractionPrompt?: string
-  customUpdateMemoryPrompt?: string
-}
