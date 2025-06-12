@@ -13,7 +13,7 @@ import ModelAvatar from '@renderer/components/Avatar/ModelAvatar'
 import EmojiIcon from '@renderer/components/EmojiIcon'
 import CopyIcon from '@renderer/components/Icons/CopyIcon'
 import PromptPopup from '@renderer/components/Popups/PromptPopup'
-import { useAssistant, useAssistants } from '@renderer/hooks/useAssistant'
+import { useAssistant, useAssistants, useTopicsForAssistant } from '@renderer/hooks/useAssistant'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { useTags } from '@renderer/hooks/useTags'
 import AssistantSettingsPopup from '@renderer/pages/settings/AssistantSettings'
@@ -62,6 +62,8 @@ const AssistantItem: FC<AssistantItemProps> = ({
   const defaultModel = getDefaultModel()
   const { assistants, updateAssistants } = useAssistants()
 
+  const topics = useTopicsForAssistant(assistant.id)
+
   const [isPending, setIsPending] = useState(false)
 
   useEffect(() => {
@@ -70,9 +72,9 @@ const AssistantItem: FC<AssistantItemProps> = ({
       return
     }
 
-    const hasPending = assistant.topics.some((topic) => hasTopicPendingRequests(topic.id))
+    const hasPending = topics.some((topic) => hasTopicPendingRequests(topic.id))
     setIsPending(hasPending)
-  }, [isActive, assistant.topics])
+  }, [isActive, topics])
 
   const sortByPinyinAsc = useCallback(() => {
     updateAssistants(sortAssistantsByPinyin(assistants, true))
@@ -161,7 +163,7 @@ const AssistantItem: FC<AssistantItemProps> = ({
         </AssistantNameRow>
         {isActive && (
           <MenuButton onClick={() => EventEmitter.emit(EVENT_NAMES.SWITCH_TOPIC_SIDEBAR)}>
-            <TopicCount className="topics-count">{assistant.topics.length}</TopicCount>
+            <TopicCount className="topics-count">{topics.length}</TopicCount>
           </MenuButton>
         )}
       </Container>

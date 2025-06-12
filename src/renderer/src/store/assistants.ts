@@ -1,9 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { DEFAULT_CONTEXTCOUNT, DEFAULT_TEMPERATURE } from '@renderer/config/constant'
-import { TopicManager } from '@renderer/hooks/useTopic'
-import { getDefaultAssistant, getDefaultTopic } from '@renderer/services/AssistantService'
-import { Assistant, AssistantSettings, Model, Topic } from '@renderer/types'
-import { isEmpty, uniqBy } from 'lodash'
+import { getDefaultAssistant } from '@renderer/services/AssistantService'
+import { Assistant, AssistantSettings, Model } from '@renderer/types'
 
 export interface AssistantsState {
   defaultAssistant: Assistant
@@ -11,9 +9,14 @@ export interface AssistantsState {
   tagsOrder: string[]
 }
 
+// 之前的两个实例会导致两个助手不一致的问题
+// FIXME: 更彻底的办法在这次重构就直接把二者合并了
+// Create a single default assistant instance to ensure consistency
+const defaultAssistant = getDefaultAssistant()
+
 const initialState: AssistantsState = {
-  defaultAssistant: getDefaultAssistant(),
-  assistants: [getDefaultAssistant()],
+  defaultAssistant: defaultAssistant,
+  assistants: [defaultAssistant], // Share the same reference
   tagsOrder: []
 }
 
@@ -22,10 +25,23 @@ const assistantsSlice = createSlice({
   initialState,
   reducers: {
     updateDefaultAssistant: (state, action: PayloadAction<{ assistant: Assistant }>) => {
-      state.defaultAssistant = action.payload.assistant
+      const assistant = action.payload.assistant
+      state.defaultAssistant = assistant
+
+      // Also update the corresponding assistant in the array
+      const index = state.assistants.findIndex((a) => a.id === assistant.id)
+      if (index !== -1) {
+        state.assistants[index] = assistant
+      }
     },
     updateAssistants: (state, action: PayloadAction<Assistant[]>) => {
       state.assistants = action.payload
+
+      // Update defaultAssistant if it exists in the new array
+      const defaultInArray = action.payload.find((a) => a.id === state.defaultAssistant.id)
+      if (defaultInArray) {
+        state.defaultAssistant = defaultInArray
+      }
     },
     addAssistant: (state, action: PayloadAction<Assistant>) => {
       state.assistants.push(action.payload)
@@ -34,7 +50,13 @@ const assistantsSlice = createSlice({
       state.assistants = state.assistants.filter((c) => c.id !== action.payload.id)
     },
     updateAssistant: (state, action: PayloadAction<Assistant>) => {
-      state.assistants = state.assistants.map((c) => (c.id === action.payload.id ? action.payload : c))
+      const assistant = action.payload
+      state.assistants = state.assistants.map((c) => (c.id === assistant.id ? assistant : c))
+
+      // Also update defaultAssistant if it's the same assistant
+      if (state.defaultAssistant.id === assistant.id) {
+        state.defaultAssistant = assistant
+      }
     },
     updateAssistantSettings: (
       state,
@@ -58,78 +80,25 @@ const assistantsSlice = createSlice({
         }
       }
     },
-    addTopic: (state, action: PayloadAction<{ assistantId: string; topic: Topic }>) => {
-      const topic = action.payload.topic
-      topic.createdAt = topic.createdAt || new Date().toISOString()
-      topic.updatedAt = topic.updatedAt || new Date().toISOString()
-      state.assistants = state.assistants.map((assistant) =>
-        assistant.id === action.payload.assistantId
-          ? {
-              ...assistant,
-              topics: uniqBy([topic, ...assistant.topics], 'id')
-            }
-          : assistant
-      )
-    },
-    removeTopic: (state, action: PayloadAction<{ assistantId: string; topic: Topic }>) => {
-      state.assistants = state.assistants.map((assistant) =>
-        assistant.id === action.payload.assistantId
-          ? {
-              ...assistant,
-              topics: assistant.topics.filter(({ id }) => id !== action.payload.topic.id)
-            }
-          : assistant
-      )
-    },
-    updateTopic: (state, action: PayloadAction<{ assistantId: string; topic: Topic }>) => {
-      const newTopic = action.payload.topic
-      newTopic.updatedAt = new Date().toISOString()
-      state.assistants = state.assistants.map((assistant) =>
-        assistant.id === action.payload.assistantId
-          ? {
-              ...assistant,
-              topics: assistant.topics.map((topic) => {
-                const _topic = topic.id === newTopic.id ? newTopic : topic
-                _topic.messages = []
-                return _topic
-              })
-            }
-          : assistant
-      )
-    },
-    updateTopics: (state, action: PayloadAction<{ assistantId: string; topics: Topic[] }>) => {
-      state.assistants = state.assistants.map((assistant) =>
-        assistant.id === action.payload.assistantId
-          ? {
-              ...assistant,
-              topics: action.payload.topics.map((topic) =>
-                isEmpty(topic.messages) ? topic : { ...topic, messages: [] }
-              )
-            }
-          : assistant
-      )
-    },
-    removeAllTopics: (state, action: PayloadAction<{ assistantId: string }>) => {
-      state.assistants = state.assistants.map((assistant) => {
-        if (assistant.id === action.payload.assistantId) {
-          assistant.topics.forEach((topic) => TopicManager.removeTopic(topic.id))
-          return {
-            ...assistant,
-            topics: [getDefaultTopic(assistant.id)]
-          }
-        }
-        return assistant
-      })
-    },
+
     setModel: (state, action: PayloadAction<{ assistantId: string; model: Model }>) => {
+      const { assistantId, model } = action.payload
       state.assistants = state.assistants.map((assistant) =>
-        assistant.id === action.payload.assistantId
+        assistant.id === assistantId
           ? {
               ...assistant,
-              model: action.payload.model
+              model: model
             }
           : assistant
       )
+
+      // Also update defaultAssistant if it's the same assistant
+      if (state.defaultAssistant.id === assistantId) {
+        state.defaultAssistant = {
+          ...state.defaultAssistant,
+          model: model
+        }
+      }
     },
     setTagsOrder: (state, action: PayloadAction<string[]>) => {
       state.tagsOrder = action.payload
@@ -143,11 +112,6 @@ export const {
   addAssistant,
   removeAssistant,
   updateAssistant,
-  addTopic,
-  removeTopic,
-  updateTopic,
-  updateTopics,
-  removeAllTopics,
   setModel,
   setTagsOrder,
   updateAssistantSettings

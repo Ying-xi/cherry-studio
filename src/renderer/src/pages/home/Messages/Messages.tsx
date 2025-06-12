@@ -112,7 +112,7 @@ const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, o
 
       setDisplayMessages([])
 
-      const _topic = getTopic(assistant, topic.id)
+      const _topic = getTopic(topic.id)
       _topic && updateTopic({ ..._topic, name: defaultTopic.name } as Topic)
     },
     [assistant, clearTopicMessages, topic.id, updateTopic]

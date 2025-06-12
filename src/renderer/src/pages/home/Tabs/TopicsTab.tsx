@@ -15,7 +15,7 @@ import ObsidianExportPopup from '@renderer/components/Popups/ObsidianExportPopup
 import PromptPopup from '@renderer/components/Popups/PromptPopup'
 import Scrollbar from '@renderer/components/Scrollbar'
 import { isMac } from '@renderer/config/constant'
-import { useAssistant, useAssistants } from '@renderer/hooks/useAssistant'
+import { useAssistant, useAssistants, useTopicsForAssistant } from '@renderer/hooks/useAssistant'
 import { modelGenerating } from '@renderer/hooks/useRuntime'
 import { useSettings } from '@renderer/hooks/useSettings'
 import { TopicManager } from '@renderer/hooks/useTopic'
@@ -56,6 +56,8 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
   const { assistant, removeTopic, moveTopic, updateTopic, updateTopics } = useAssistant(_assistant.id)
   const { t } = useTranslation()
   const { showTopicTime, pinTopicsToTop, setTopicPosition } = useSettings()
+
+  const topics = useTopicsForAssistant(_assistant.id)
 
   const borderRadius = showTopicTime ? 12 : 'var(--list-item-border-radius)'
 
@@ -105,16 +107,16 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
   const handleConfirmDelete = useCallback(
     async (topic: Topic, e: React.MouseEvent) => {
       e.stopPropagation()
-      if (assistant.topics.length === 1) {
+      if (topics.length === 1) {
         return onClearMessages(topic)
       }
       await modelGenerating()
-      const index = findIndex(assistant.topics, (t) => t.id === topic.id)
-      setActiveTopic(assistant.topics[index + 1 === assistant.topics.length ? index - 1 : index + 1])
+      const index = findIndex(topics, (t) => t.id === topic.id)
+      setActiveTopic(topics[index + 1 === topics.length ? index - 1 : index + 1])
       removeTopic(topic)
       setDeletingTopicId(null)
     },
-    [assistant.topics, onClearMessages, removeTopic, setActiveTopic]
+    [topics, onClearMessages, removeTopic, setActiveTopic]
   )
 
   const onPinTopic = useCallback(
@@ -129,22 +131,22 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
     async (topic: Topic) => {
       await modelGenerating()
       if (topic.id === activeTopic?.id) {
-        const index = findIndex(assistant.topics, (t) => t.id === topic.id)
-        setActiveTopic(assistant.topics[index + 1 === assistant.topics.length ? index - 1 : index + 1])
+        const index = findIndex(topics, (t) => t.id === topic.id)
+        setActiveTopic(topics[index + 1 === topics.length ? index - 1 : index + 1])
       }
       removeTopic(topic)
     },
-    [assistant.topics, removeTopic, setActiveTopic, activeTopic]
+    [topics, removeTopic, setActiveTopic, activeTopic]
   )
 
   const onMoveTopic = useCallback(
     async (topic: Topic, toAssistant: Assistant) => {
       await modelGenerating()
-      const index = findIndex(assistant.topics, (t) => t.id === topic.id)
-      setActiveTopic(assistant.topics[index + 1 === assistant.topics.length ? 0 : index + 1])
+      const index = findIndex(topics, (t) => t.id === topic.id)
+      setActiveTopic(topics[index + 1 === topics.length ? 0 : index + 1])
       moveTopic(topic, toAssistant)
     },
-    [assistant.topics, moveTopic, setActiveTopic]
+    [topics, moveTopic, setActiveTopic]
   )
 
   const onSwitchTopic = useCallback(
@@ -358,7 +360,7 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
       }
     ]
 
-    if (assistants.length > 1 && assistant.topics.length > 1) {
+    if (assistants.length > 1 && topics.length > 1) {
       menus.push({
         label: t('chat.topics.move_to'),
         key: 'move',
@@ -373,7 +375,7 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
       })
     }
 
-    if (assistant.topics.length > 1 && !topic.pinned) {
+    if (topics.length > 1 && !topic.pinned) {
       menus.push({ type: 'divider' })
       menus.push({
         label: t('common.delete'),
@@ -398,6 +400,7 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
     exportMenuOptions.joplin,
     exportMenuOptions.siyuan,
     assistants,
+    topics.length,
     assistant,
     updateTopic,
     activeTopic.id,
@@ -412,14 +415,14 @@ const Topics: FC<Props> = ({ assistant: _assistant, activeTopic, setActiveTopic 
   // Sort topics based on pinned status if pinTopicsToTop is enabled
   const sortedTopics = useMemo(() => {
     if (pinTopicsToTop) {
-      return [...assistant.topics].sort((a, b) => {
+      return [...topics].sort((a, b) => {
         if (a.pinned && !b.pinned) return -1
         if (!a.pinned && b.pinned) return 1
         return 0
       })
     }
-    return assistant.topics
-  }, [assistant.topics, pinTopicsToTop])
+    return topics
+  }, [topics, pinTopicsToTop])
 
   return (
     <Dropdown menu={{ items: getTopicMenuItems }} trigger={['contextMenu']}>

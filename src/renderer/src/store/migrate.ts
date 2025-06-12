@@ -5,7 +5,8 @@ import { SYSTEM_MODELS } from '@renderer/config/models'
 import { TRANSLATE_PROMPT } from '@renderer/config/prompts'
 import db from '@renderer/databases'
 import i18n from '@renderer/i18n'
-import { Assistant, WebSearchProvider } from '@renderer/types'
+import { getDefaultTopic } from '@renderer/services/AssistantService'
+import { Assistant, Topic, WebSearchProvider } from '@renderer/types'
 import { getDefaultGroupName, getLeadingEmoji, runAsyncFunction, uuid } from '@renderer/utils'
 import { isEmpty } from 'lodash'
 import { createMigrate } from 'redux-persist'
@@ -1556,6 +1557,121 @@ const migrateConfig = {
 
       return state
     } catch (error) {
+      return state
+    }
+  },
+  '112': (state: RootState) => {
+    try {
+      // Step 1: Merge defaultAssistant and assistants[0] topics to ensure consistency
+      // This fixes any inconsistencies from backup restores or previous versions
+
+      if (state.assistants?.defaultAssistant && state.assistants?.assistants?.length > 0) {
+        const defaultAssistantId = state.assistants.defaultAssistant.id
+        const defaultAssistantInArray = state.assistants.assistants.find((a) => a.id === defaultAssistantId)
+
+        if (defaultAssistantInArray) {
+          // Merge topics from both defaultAssistant and assistants[0]
+          const defaultTopics = state.assistants.defaultAssistant.topics || []
+          const arrayTopics = defaultAssistantInArray.topics || []
+
+          // Create a map to avoid duplicates (by topic id)
+          const topicsMap = new Map<string, Topic>()
+
+          // Add topics from both sources
+          const allTopics = [...defaultTopics, ...arrayTopics]
+          allTopics.forEach((topic) => {
+            if (topic && topic.id) {
+              // Keep the one with more recent updatedAt, or prefer the one from assistants array
+              const existing = topicsMap.get(topic.id)
+              if (
+                !existing ||
+                (topic.updatedAt && existing.updatedAt && topic.updatedAt > existing.updatedAt) ||
+                arrayTopics.includes(topic)
+              ) {
+                topicsMap.set(topic.id, topic)
+              }
+            }
+          })
+
+          const mergedTopics = Array.from(topicsMap.values())
+
+          // Update both defaultAssistant and the assistant in array
+          state.assistants.defaultAssistant.topics = mergedTopics
+          defaultAssistantInArray.topics = mergedTopics
+        } else {
+          // defaultAssistant not found in array, add it
+          state.assistants.assistants.unshift(state.assistants.defaultAssistant)
+        }
+      }
+
+      // Step 2: Migrate from nested topic structure to flattened topic structure
+      // This should run after v112 which ensures defaultAssistant and assistants[0] consistency
+
+      // Initialize the new topics slice if it doesn't exist
+      if (!state.topics) {
+        state.topics = {
+          ids: [],
+          entities: {},
+          topicIdsByAssistant: {}
+        }
+      }
+
+      // Type for legacy assistant with topics
+      type LegacyAssistant = Assistant
+
+      // Extract all topics from assistants and flatten them
+      const allTopics: Topic[] = []
+      const topicIdsByAssistant: Record<string, string[]> = {}
+
+      // Process regular assistants
+      if (state.assistants?.assistants) {
+        state.assistants.assistants.forEach((assistant) => {
+          const legacyAssistant = assistant as LegacyAssistant
+          if (legacyAssistant.topics && Array.isArray(legacyAssistant.topics) && legacyAssistant.topics.length > 0) {
+            allTopics.push(...legacyAssistant.topics)
+            topicIdsByAssistant[assistant.id] = legacyAssistant.topics.map((t: Topic) => t.id)
+
+            // Clear deprecated field
+            legacyAssistant.topics = []
+          } else {
+            // Create default topic for assistant with no topics
+            const defaultTopic = getDefaultTopic(assistant.id)
+            allTopics.push(defaultTopic)
+            topicIdsByAssistant[assistant.id] = [defaultTopic.id]
+
+            // Set deprecated field
+            legacyAssistant.topics = []
+          }
+        })
+      }
+
+      // Process default assistant - should already be consistent after v112
+      if (state.assistants?.defaultAssistant) {
+        const legacyDefaultAssistant = state.assistants.defaultAssistant as LegacyAssistant
+
+        // Since v112 already ensured consistency, just clear the deprecated field
+        legacyDefaultAssistant.topics = []
+      }
+
+      // Populate the new topics slice
+      const topicEntities: Record<string, Topic> = {}
+      const topicIds: string[] = []
+
+      allTopics.forEach((topic) => {
+        topicEntities[topic.id] = topic
+        topicIds.push(topic.id)
+      })
+
+      // Update topics slice
+      state.topics = {
+        ids: topicIds,
+        entities: topicEntities,
+        topicIdsByAssistant
+      }
+
+      return state
+    } catch (error) {
+      console.error('Migration 112 failed:', error)
       return state
     }
   }

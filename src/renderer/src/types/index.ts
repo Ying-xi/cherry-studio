@@ -10,6 +10,7 @@ export type Assistant = {
   name: string
   prompt: string
   knowledge_bases?: KnowledgeBase[]
+  /** @deprecated 话题现在通过独立的 topics slice 管理，请使用 selectTopicsForAssistant selector */
   topics: Topic[]
   type: string
   emoji?: string
@@ -69,6 +70,9 @@ export type Agent = Omit<Assistant, 'model'> & {
   group?: string[]
 }
 
+/**
+ * @deprecated 旧版消息类型，已废弃
+ */
 export type LegacyMessage = {
   id: string
   assistantId: string

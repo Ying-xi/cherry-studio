@@ -1,8 +1,9 @@
 import { SearchOutlined } from '@ant-design/icons'
 import { VStack } from '@renderer/components/Layout'
-import { useAssistants } from '@renderer/hooks/useAssistant'
 import useScrollPosition from '@renderer/hooks/useScrollPosition'
 import { getTopicById } from '@renderer/hooks/useTopic'
+import { useAppSelector } from '@renderer/store'
+import { selectAllTopics } from '@renderer/store/topics'
 import { Topic } from '@renderer/types'
 import { Button, Divider, Empty } from 'antd'
 import dayjs from 'dayjs'
@@ -17,13 +18,13 @@ type Props = {
 } & React.HTMLAttributes<HTMLDivElement>
 
 const TopicsHistory: React.FC<Props> = ({ keywords, onClick, onSearch, ...props }) => {
-  const { assistants } = useAssistants()
+  const topics = useAppSelector(selectAllTopics)
   const { t } = useTranslation()
   const { handleScroll, containerRef } = useScrollPosition('TopicsHistory')
 
-  const topics = orderBy(assistants.map((assistant) => assistant.topics).flat(), 'createdAt', 'desc')
+  const orderedTopics = orderBy(topics, 'createdAt', 'desc')
 
-  const filteredTopics = topics.filter((topic) => {
+  const filteredTopics = orderedTopics.filter((topic) => {
     return topic.name.toLowerCase().includes(keywords.toLowerCase())
   })
 

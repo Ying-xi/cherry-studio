@@ -3,6 +3,8 @@ import { useSettings } from '@renderer/hooks/useSettings'
 import { useActiveTopic } from '@renderer/hooks/useTopic'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import NavigationService from '@renderer/services/NavigationService'
+import store from '@renderer/store'
+import { selectTopicById } from '@renderer/store/topics'
 import { Assistant } from '@renderer/types'
 import { FC, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -22,7 +24,8 @@ const HomePage: FC = () => {
   const state = location.state
 
   const [activeAssistant, setActiveAssistant] = useState(state?.assistant || _activeAssistant || assistants[0])
-  const { activeTopic, setActiveTopic } = useActiveTopic(activeAssistant, state?.topic)
+  const topicFromRedux = state?.topicId ? selectTopicById(store.getState(), state.topicId) : undefined
+  const { activeTopic, setActiveTopic } = useActiveTopic(activeAssistant, topicFromRedux)
   const { showAssistants, showTopics, topicPosition } = useSettings()
 
   _activeAssistant = activeAssistant
@@ -33,7 +36,8 @@ const HomePage: FC = () => {
 
   useEffect(() => {
     state?.assistant && setActiveAssistant(state?.assistant)
-    state?.topic && setActiveTopic(state?.topic)
+    const topicFromRedux = state?.topicId ? selectTopicById(store.getState(), state.topicId) : undefined
+    topicFromRedux && setActiveTopic(topicFromRedux)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state])
 

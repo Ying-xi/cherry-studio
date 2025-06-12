@@ -42,7 +42,7 @@ const TopicMessages: FC<Props> = ({ topic, ...props }) => {
     await isGenerating()
     SearchPopup.hide()
     const assistant = getAssistantById(topic.assistantId)
-    navigate('/', { state: { assistant, topic } })
+    navigate('/', { state: { assistant, topicId: topic.id } })
     setTimeout(() => EventEmitter.emit(EVENT_NAMES.SHOW_TOPIC_SIDEBAR), 100)
   }
 

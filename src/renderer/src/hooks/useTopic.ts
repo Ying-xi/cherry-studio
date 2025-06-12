@@ -3,14 +3,13 @@ import i18n from '@renderer/i18n'
 import { EVENT_NAMES, EventEmitter } from '@renderer/services/EventService'
 import { deleteMessageFiles } from '@renderer/services/MessagesService'
 import store from '@renderer/store'
-import { updateTopic } from '@renderer/store/assistants'
 import { loadTopicMessagesThunk } from '@renderer/store/thunk/messageThunk'
+import { selectTopicById, selectTopicsForAssistant, topicsActions } from '@renderer/store/topics'
 import { Assistant, Topic } from '@renderer/types'
 import { findMainTextBlocks } from '@renderer/utils/messageUtils/find'
-import { find, isEmpty } from 'lodash'
+import { isEmpty } from 'lodash'
 import { useEffect, useState } from 'react'
 
-import { useAssistant } from './useAssistant'
 import { getStoreSetting } from './useSettings'
 
 const renamingTopics = new Set<string>()
@@ -19,8 +18,11 @@ let _activeTopic: Topic
 let _setActiveTopic: (topic: Topic) => void
 
 export function useActiveTopic(_assistant: Assistant, topic?: Topic) {
-  const { assistant } = useAssistant(_assistant.id)
-  const [activeTopic, setActiveTopic] = useState(topic || _activeTopic || assistant?.topics[0])
+  const topics = store.getState().topics ? selectTopicsForAssistant(store.getState(), _assistant.id) : []
+  console.log('topics', topics)
+
+  const [activeTopic, setActiveTopic] = useState(topic || _activeTopic || topics[0])
+  console.log('activeTopic', activeTopic)
 
   _activeTopic = activeTopic
   _setActiveTopic = setActiveTopic
@@ -33,27 +35,27 @@ export function useActiveTopic(_assistant: Assistant, topic?: Topic) {
   }, [activeTopic])
 
   useEffect(() => {
-    // activeTopic not in assistant.topics
-    if (assistant && !find(assistant.topics, { id: activeTopic?.id })) {
-      setActiveTopic(assistant.topics[0])
+    // activeTopic not in assistant topics
+    const currentTopics = selectTopicsForAssistant(store.getState(), _assistant.id)
+    if (currentTopics.length > 0 && !currentTopics.find((t) => t.id === activeTopic?.id)) {
+      setActiveTopic(currentTopics[0])
     }
-  }, [activeTopic?.id, assistant])
+  }, [activeTopic?.id, _assistant.id])
 
   return { activeTopic, setActiveTopic }
 }
 
-export function useTopic(assistant: Assistant, topicId?: string) {
-  return assistant?.topics.find((topic) => topic.id === topicId)
+export function useTopic(topicId?: string) {
+  if (!topicId) return undefined
+  return selectTopicById(store.getState(), topicId)
 }
 
-export function getTopic(assistant: Assistant, topicId: string) {
-  return assistant?.topics.find((topic) => topic.id === topicId)
+export function getTopic(topicId: string) {
+  return selectTopicById(store.getState(), topicId)
 }
 
 export async function getTopicById(topicId: string) {
-  const assistants = store.getState().assistants.assistants
-  const topics = assistants.map((assistant) => assistant.topics).flat()
-  const topic = topics.find((topic) => topic.id === topicId)
+  const topic = selectTopicById(store.getState(), topicId)
   const messages = await TopicManager.getTopicMessages(topicId)
   return { ...topic, messages } as Topic
 }
@@ -87,7 +89,7 @@ export const autoRenameTopic = async (assistant: Assistant, topicId: string) => 
       if (topicName) {
         const data = { ...topic, name: topicName } as Topic
         _setActiveTopic(data)
-        store.dispatch(updateTopic({ assistantId: assistant.id, topic: data }))
+        store.dispatch(topicsActions.updateTopic({ assistantId: assistant.id, topic: data }))
       }
       return
     }
@@ -98,7 +100,7 @@ export const autoRenameTopic = async (assistant: Assistant, topicId: string) => 
       if (summaryText) {
         const data = { ...topic, name: summaryText }
         _setActiveTopic(data)
-        store.dispatch(updateTopic({ assistantId: assistant.id, topic: data }))
+        store.dispatch(topicsActions.updateTopic({ assistantId: assistant.id, topic: data }))
       }
     }
   } finally {

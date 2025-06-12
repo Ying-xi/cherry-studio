@@ -1,9 +1,10 @@
 import Scrollbar from '@renderer/components/Scrollbar'
+import { useTopicsForAssistant } from '@renderer/hooks/useAssistant'
 import { useTopicMessages } from '@renderer/hooks/useMessageOperations'
 import { Assistant } from '@renderer/types'
 import { getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { last } from 'lodash'
-import { FC, useRef } from 'react'
+import { FC, useMemo, useRef } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
@@ -21,7 +22,10 @@ interface ContainerProps {
 
 const Messages: FC<Props> = ({ assistant, route }) => {
   // const [messages, setMessages] = useState<Message[]>([])
-  const messages = useTopicMessages(assistant.topics[0].id)
+  const topics = useTopicsForAssistant(assistant.id)
+  const firstTopic = useMemo(() => topics[0], [topics])
+
+  const messages = useTopicMessages(firstTopic?.id || '')
   const containerRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef(messages)
 

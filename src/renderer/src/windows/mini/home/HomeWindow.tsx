@@ -1,6 +1,6 @@
 import { isMac } from '@renderer/config/constant'
 import { useTheme } from '@renderer/context/ThemeProvider'
-import { useDefaultAssistant, useDefaultModel } from '@renderer/hooks/useAssistant'
+import { useDefaultAssistant, useDefaultModel, useTopicsForAssistant } from '@renderer/hooks/useAssistant'
 import { useSettings } from '@renderer/hooks/useSettings'
 import i18n from '@renderer/i18n'
 import { fetchChatCompletion } from '@renderer/services/ApiService'
@@ -20,7 +20,7 @@ import { IpcChannel } from '@shared/IpcChannel'
 import { Divider } from 'antd'
 import dayjs from 'dayjs'
 import { isEmpty } from 'lodash'
-import React, { FC, useCallback, useEffect, useRef, useState } from 'react'
+import React, { FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
@@ -41,7 +41,10 @@ const HomeWindow: FC = () => {
   const [lastClipboardText, setLastClipboardText] = useState<string | null>(null)
   const textChange = useState(() => {})[1]
   const { defaultAssistant } = useDefaultAssistant()
-  const topic = defaultAssistant.topics[0]
+
+  const topics = useTopicsForAssistant(defaultAssistant.id)
+  const topic = useMemo(() => topics[0], [topics])
+
   const { defaultModel, quickAssistantModel } = useDefaultModel()
   // 如果 quickAssistantModel 未設定，則使用 defaultModel
   const model = quickAssistantModel || defaultModel
@@ -182,7 +185,7 @@ const HomeWindow: FC = () => {
       let blockId: string | null = null
       let blockContent: string = ''
 
-      const assistantMessage = getAssistantMessage({ assistant, topic: assistant.topics[0] })
+      const assistantMessage = getAssistantMessage({ assistant, topic })
       store.dispatch(newMessagesActions.addMessage({ topicId, message: assistantMessage }))
 
       fetchChatCompletion({
