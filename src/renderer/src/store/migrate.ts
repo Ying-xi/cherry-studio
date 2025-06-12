@@ -1562,6 +1562,17 @@ const migrateConfig = {
   },
   '112': (state: RootState) => {
     try {
+      addProvider(state, 'cephalon')
+      addProvider(state, '302ai')
+      state.llm.providers = moveProvider(state.llm.providers, 'cephalon', 13)
+      state.llm.providers = moveProvider(state.llm.providers, '302ai', 14)
+      return state
+    } catch (error) {
+      return state
+    }
+  },
+  '113': (state: RootState) => {
+    try {
       // Step 1: Merge defaultAssistant and assistants[0] topics to ensure consistency
       // This fixes any inconsistencies from backup restores or previous versions
 
