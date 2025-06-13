@@ -8,7 +8,7 @@ import AihubmixPage from './AihubmixPage'
 import DmxapiPage from './DmxapiPage'
 import TokenFluxPage from './TokenFluxPage'
 
-const Options = ['aihubmix', 'silicon', 'dmxapi', 'tokenflux']
+const Options = ['aihubmix', 'dmxapi', 'tokenflux']
 
 const PaintingsRoutePage: FC = () => {
   const params = useParams()
