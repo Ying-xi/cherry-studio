@@ -6,7 +6,6 @@ import { Route, Routes, useParams } from 'react-router-dom'
 
 import AihubmixPage from './AihubmixPage'
 import DmxapiPage from './DmxapiPage'
-import SiliconPage from './SiliconPage'
 import TokenFluxPage from './TokenFluxPage'
 
 const Options = ['aihubmix', 'silicon', 'dmxapi', 'tokenflux']
@@ -27,7 +26,7 @@ const PaintingsRoutePage: FC = () => {
     <Routes>
       <Route path="*" element={<AihubmixPage Options={Options} />} />
       <Route path="/aihubmix" element={<AihubmixPage Options={Options} />} />
-      <Route path="/silicon" element={<SiliconPage Options={Options} />} />
+      {/*<Route path="/silicon" element={<SiliconPage Options={Options} />} />*/}
       <Route path="/dmxapi" element={<DmxapiPage Options={Options} />} />
       <Route path="/tokenflux" element={<TokenFluxPage Options={Options} />} />
     </Routes>
