@@ -12,7 +12,6 @@ import styled from 'styled-components'
 import AssistantKnowledgeBaseSettings from './AssistantKnowledgeBaseSettings'
 import AssistantMCPSettings from './AssistantMCPSettings'
 import AssistantMemorySettings from './AssistantMemorySettings'
-import AssistantMessagesSettings from './AssistantMessagesSettings'
 import AssistantModelSettings from './AssistantModelSettings'
 import AssistantPromptSettings from './AssistantPromptSettings'
 import AssistantRegularPromptsSettings from './AssistantRegularPromptsSettings'
@@ -70,10 +69,6 @@ const AssistantSettingPopupContainer: React.FC<Props> = ({ resolve, tab, ...prop
     {
       key: 'model',
       label: t('assistants.settings.model')
-    },
-    {
-      key: 'messages',
-      label: t('assistants.settings.preset_messages')
     },
     showKnowledgeIcon && {
       key: 'knowledge_base',
@@ -133,13 +128,6 @@ const AssistantSettingPopupContainer: React.FC<Props> = ({ resolve, tab, ...prop
           )}
           {menu === 'model' && (
             <AssistantModelSettings
-              assistant={assistant}
-              updateAssistant={updateAssistant}
-              updateAssistantSettings={updateAssistantSettings}
-            />
-          )}
-          {menu === 'messages' && (
-            <AssistantMessagesSettings
               assistant={assistant}
               updateAssistant={updateAssistant}
               updateAssistantSettings={updateAssistantSettings}
