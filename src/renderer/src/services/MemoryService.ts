@@ -1,8 +1,9 @@
 import { AssistantMessage } from '@renderer/types'
-import { AddMemoryOptions, SearchMemoryOptions, SearchResult } from '@renderer/types/memory'
+import { AddMemoryOptions, GetAllMemoryOptions, SearchMemoryOptions, SearchResult } from '@renderer/types/memory'
 
 /**
  * Service for managing memory operations including storing, searching, and retrieving memories
+ * This service delegates all operations to the main process via IPC
  */
 class MemoryService {
   private static instance: MemoryService | null = null
@@ -20,12 +21,11 @@ class MemoryService {
 
   /**
    * Lists all stored memories
+   * @param config - Optional configuration for filtering memories
    * @returns Promise resolving to search results containing all memories
    */
-  public async list(): Promise<SearchResult> {
-    return Promise.resolve({
-      results: []
-    })
+  public async list(config?: GetAllMemoryOptions): Promise<SearchResult> {
+    return window.api.memory.list(config)
   }
 
   /**
@@ -35,10 +35,7 @@ class MemoryService {
    * @returns Promise resolving to search results of added memories
    */
   public async add(messages: string | AssistantMessage[], config: AddMemoryOptions): Promise<SearchResult> {
-    console.log('Adding memory:', messages, config)
-    return Promise.resolve({
-      results: []
-    })
+    return window.api.memory.add(messages, config)
   }
 
   /**
@@ -48,21 +45,7 @@ class MemoryService {
    * @returns Promise resolving to search results matching the query
    */
   public async search(query: string, config: SearchMemoryOptions): Promise<SearchResult> {
-    console.log('Searching memory:', query, config)
-    return Promise.resolve({
-      results: [
-        {
-          id: '1',
-          memory: 'My name is John',
-          createdAt: new Date(2024, 12, 12).toISOString()
-        },
-        {
-          id: '2',
-          memory: 'Change my name to Tony',
-          createdAt: new Date(2025, 2, 12).toISOString()
-        }
-      ]
-    })
+    return window.api.memory.search(query, config)
   }
 
   /**
@@ -71,7 +54,35 @@ class MemoryService {
    * @returns Promise that resolves when deletion is complete
    */
   public async delete(id: string): Promise<void> {
-    console.log('Deleting memory:', id)
+    return window.api.memory.delete(id)
+  }
+
+  /**
+   * Updates a specific memory by ID
+   * @param id - Unique identifier of the memory to update
+   * @param memory - New memory content
+   * @param metadata - Optional metadata to update
+   * @returns Promise that resolves when update is complete
+   */
+  public async update(id: string, memory: string, metadata?: Record<string, any>): Promise<void> {
+    return window.api.memory.update(id, memory, metadata)
+  }
+
+  /**
+   * Gets the history of changes for a specific memory
+   * @param memoryId - Unique identifier of the memory
+   * @returns Promise resolving to array of history items
+   */
+  public async getHistory(memoryId: string): Promise<any[]> {
+    return window.api.memory.getHistory(memoryId)
+  }
+
+  /**
+   * Resets all memories (deletes everything)
+   * @returns Promise that resolves when reset is complete
+   */
+  public async reset(): Promise<void> {
+    return window.api.memory.reset()
   }
 }
 

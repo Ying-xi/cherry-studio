@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { MemoryConfig } from '@renderer/types'
+import type { MemoryConfig } from '@renderer/types/memory'
 import { factExtractionPrompt, updateMemoryPrompt } from '@renderer/utils/memory-prompts'
 
 /**
