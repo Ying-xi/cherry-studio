@@ -171,12 +171,12 @@ interface MainMemoryService {
 **Database Schema (LibSQL):**
 
 ```sql
--- Core memories table
+-- Core memories table with native vector support
 CREATE TABLE IF NOT EXISTS memories (
     id TEXT PRIMARY KEY,
     memory TEXT NOT NULL,
     hash TEXT UNIQUE,
-    embedding BLOB, -- Store as binary vector data
+    embedding F32_BLOB(1536), -- Native vector column (1536 dimensions for OpenAI embeddings)
     metadata TEXT, -- JSON string
     user_id TEXT,
     agent_id TEXT,
@@ -205,14 +205,18 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_id ON memories(agent_id);
 CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(hash);
 CREATE INDEX IF NOT EXISTS idx_memory_history_memory_id ON memory_history(memory_id);
+
+-- Vector index for similarity search (libsql native)
+CREATE INDEX IF NOT EXISTS idx_memories_vector ON memories (libsql_vector_idx(embedding));
 ```
 
 **Key Implementation Components:**
 
 1. **Vector Storage Manager**
 
-   - Store embeddings as binary blobs in libsql
-   - Implement cosine similarity search for vector retrieval
+   - Store embeddings using libsql native F32_BLOB vector columns
+   - Use libsql native vector_distance_cos() function for cosine similarity
+   - Leverage libsql vector_top_k() for efficient nearest neighbor search
    - Cache frequently accessed embeddings in memory
 
 2. **Memory History Manager**
@@ -315,14 +319,14 @@ interface VectorSearchOptions {
 }
 
 class VectorSearch {
-  // Cosine similarity calculation
-  private cosineSimilarity(a: number[], b: number[]): number
-
-  // Search memories by embedding similarity
+  // Use libsql native vector search with vector_top_k
   public async searchByVector(queryEmbedding: number[], options: VectorSearchOptions): Promise<MemoryItem[]>
 
-  // Hybrid search (text + vector)
+  // Hybrid search (text + vector) using libsql vector functions
   public async hybridSearch(query: string, options: VectorSearchOptions): Promise<MemoryItem[]>
+
+  // Convert embedding array to libsql vector format
+  private embeddingToVector32(embedding: number[]): string
 }
 ```
 
@@ -397,15 +401,9 @@ class MemoryProcessor {
 #### Required Libraries
 
 ```bash
-# Core dependencies
-npm install libsql better-sqlite3
-npm install @types/better-sqlite3
-
-# Vector operations
-npm install ml-distance ml-matrix
-
-# Text processing (if needed)
-npm install natural compromise
+# Core dependencies - already available
+# @libsql/client - already installed in project
+# No additional vector operation libraries needed - libsql has native vector support
 ```
 
 #### Model Integration
