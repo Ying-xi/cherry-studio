@@ -3,63 +3,18 @@ import { Model } from '@types'
 import crypto from 'crypto'
 import { app } from 'electron'
 import path from 'path'
-import { v4 as uuidv4 } from 'uuid'
+import { v4 as uuid4 } from 'uuid'
 
 import { EmbeddingService } from './EmbeddingService'
+import {
+  AddMemoryOptions,
+  GetAllMemoryOptions,
+  MemoryHistoryItem,
+  MemoryItem,
+  SearchMemoryOptions,
+  SearchResult
+} from './types'
 import { VectorSearch } from './VectorSearch'
-
-// Import types from renderer
-interface MemoryItem {
-  id: string
-  memory: string
-  hash?: string
-  createdAt?: string
-  updatedAt?: string
-  score?: number
-  metadata?: Record<string, any>
-}
-
-interface SearchResult {
-  results: MemoryItem[]
-  relations?: any[]
-}
-
-interface Entity {
-  userId?: string
-  agentId?: string
-  runId?: string
-}
-
-interface SearchFilters extends Entity {
-  [key: string]: any
-}
-
-interface AddMemoryOptions extends Entity {
-  metadata?: Record<string, any>
-  filters?: SearchFilters
-  infer?: boolean
-}
-
-interface SearchMemoryOptions extends Entity {
-  limit?: number
-  filters?: SearchFilters
-  threshold?: number
-}
-
-interface GetAllMemoryOptions extends Entity {
-  limit?: number
-}
-
-interface MemoryHistoryItem {
-  id: number
-  memoryId: string
-  previousValue?: string
-  newValue: string
-  action: 'ADD' | 'UPDATE' | 'DELETE'
-  createdAt: string
-  updatedAt: string
-  isDeleted: boolean
-}
 
 class MemoryService {
   private static instance: MemoryService | null = null
@@ -112,12 +67,13 @@ class MemoryService {
     if (!this.client) throw new Error('Database client not initialized')
 
     // Create memories table with native vector support
+    // Using F32_BLOB without dimension specification to support different embedding models
     await this.client.execute(`
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         memory TEXT NOT NULL,
         hash TEXT UNIQUE,
-        embedding F32_BLOB(1536),
+        embedding F32_BLOB,
         metadata TEXT,
         user_id TEXT,
         agent_id TEXT,
@@ -186,17 +142,17 @@ class MemoryService {
 
   private cosineSimilarity(a: number[], b: number[]): number {
     if (a.length !== b.length) return 0
-    
+
     let dotProduct = 0
     let normA = 0
     let normB = 0
-    
+
     for (let i = 0; i < a.length; i++) {
       dotProduct += a[i] * b[i]
       normA += a[i] * a[i]
       normB += b[i] * b[i]
     }
-    
+
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
   }
   */
@@ -244,7 +200,7 @@ class MemoryService {
       }
 
       // Create new memory
-      const memoryId = uuidv4()
+      const memoryId = uuid4()
       const metadata = JSON.stringify(config.metadata || {})
 
       // Generate embedding if model is configured
@@ -260,8 +216,8 @@ class MemoryService {
 
       if (embeddingVector) {
         await this.client.execute({
-          sql: `INSERT INTO memories 
-                (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at) 
+          sql: `INSERT INTO memories
+                (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at)
                 VALUES (?, ?, ?, vector32(?), ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           args: [
             memoryId,
@@ -276,8 +232,8 @@ class MemoryService {
         })
       } else {
         await this.client.execute({
-          sql: `INSERT INTO memories 
-                (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at) 
+          sql: `INSERT INTO memories
+                (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           args: [
             memoryId,
@@ -317,8 +273,8 @@ class MemoryService {
 
     try {
       let sql = `
-        SELECT id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at 
-        FROM memories 
+        SELECT id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at
+        FROM memories
         WHERE is_deleted = 0
       `
       const args: any[] = []
@@ -374,8 +330,8 @@ class MemoryService {
 
     try {
       let sql = `
-        SELECT id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at 
-        FROM memories 
+        SELECT id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at
+        FROM memories
         WHERE is_deleted = 0
       `
       const args: any[] = []
@@ -461,13 +417,33 @@ class MemoryService {
       const hash = this.generateHash(memory)
       const metadataJson = JSON.stringify(metadata || {})
 
-      // Update memory
-      await this.client.execute({
-        sql: `UPDATE memories 
-              SET memory = ?, hash = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP 
-              WHERE id = ?`,
-        args: [memory, hash, metadataJson, id]
-      })
+      // Generate new embedding if model is configured
+      let embeddingVector: string | null = null
+      if (this.currentEmbeddingModel) {
+        try {
+          const embedding = await this.generateEmbedding(memory)
+          embeddingVector = this.embeddingToVector32(embedding)
+        } catch (error) {
+          console.warn('Failed to generate embedding for update:', error)
+        }
+      }
+
+      // Update memory with or without embedding
+      if (embeddingVector) {
+        await this.client.execute({
+          sql: `UPDATE memories
+                SET memory = ?, hash = ?, metadata = ?, embedding = vector32(?), updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?`,
+          args: [memory, hash, metadataJson, embeddingVector, id]
+        })
+      } else {
+        await this.client.execute({
+          sql: `UPDATE memories
+                SET memory = ?, hash = ?, metadata = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?`,
+          args: [memory, hash, metadataJson, id]
+        })
+      }
 
       // Add to history
       await this.addHistory(id, previousMemory, memory, 'UPDATE')
@@ -482,8 +458,8 @@ class MemoryService {
 
     try {
       const result = await this.client.execute({
-        sql: `SELECT * FROM memory_history 
-              WHERE memory_id = ? AND is_deleted = 0 
+        sql: `SELECT * FROM memory_history
+              WHERE memory_id = ? AND is_deleted = 0
               ORDER BY created_at DESC`,
         args: [memoryId]
       })
@@ -514,8 +490,8 @@ class MemoryService {
 
     try {
       await this.client.execute({
-        sql: `INSERT INTO memory_history 
-              (memory_id, previous_value, new_value, action, created_at, updated_at) 
+        sql: `INSERT INTO memory_history
+              (memory_id, previous_value, new_value, action, created_at, updated_at)
               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
         args: [memoryId, previousValue, newValue, action]
       })
@@ -724,7 +700,7 @@ class MemoryService {
       // Process each memory
       for (let i = 0; i < memories.length; i++) {
         const { text, options } = memories[i]
-        const memoryId = uuidv4()
+        const memoryId = uuid4()
         const hash = this.generateHash(text)
         const metadata = JSON.stringify(options.metadata || {})
 
@@ -745,8 +721,8 @@ class MemoryService {
         // Insert memory
         if (embeddingVector) {
           await this.client.execute({
-            sql: `INSERT INTO memories 
-                  (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at) 
+            sql: `INSERT INTO memories
+                  (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at)
                   VALUES (?, ?, ?, vector32(?), ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             args: [
               memoryId,
@@ -761,8 +737,8 @@ class MemoryService {
           })
         } else {
           await this.client.execute({
-            sql: `INSERT INTO memories 
-                  (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at) 
+            sql: `INSERT INTO memories
+                  (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at)
                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
             args: [
               memoryId,

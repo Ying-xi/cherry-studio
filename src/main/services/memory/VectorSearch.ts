@@ -45,8 +45,8 @@ export class VectorSearch {
       const queryVector = this.embeddingToVector32(queryEmbedding)
 
       // Build WHERE clause for filtering
-      const whereConditions: string[] = ['m.is_deleted = 0']
-      const params: any[] = []
+      const whereConditions: string[] = ['m.is_deleted = 0', 'm.embedding IS NOT NULL']
+      const params: any[] = [queryVector]
 
       if (userId) {
         whereConditions.push('m.user_id = ?')
@@ -60,7 +60,7 @@ export class VectorSearch {
 
       const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
 
-      // Use libsql vector_top_k for efficient nearest neighbor search
+      // Fallback to direct query without vector_top_k if index doesn't exist
       const query = `
         SELECT 
           m.id,
@@ -72,17 +72,16 @@ export class VectorSearch {
           m.run_id,
           m.created_at,
           m.updated_at,
-          vector_distance_cos(m.embedding, vector32('${queryVector}')) as distance,
-          (1 - vector_distance_cos(m.embedding, vector32('${queryVector}'))) as similarity
-        FROM vector_top_k('idx_memories_vector', vector32('${queryVector}'), ${limit * 2}) v
-        JOIN memories m ON m.rowid = v.rowid
+          vector_distance_cos(m.embedding, vector32(?)) as distance,
+          (1 - vector_distance_cos(m.embedding, vector32(?))) as similarity
+        FROM memories m
         ${whereClause}
-        HAVING similarity >= ?
+        AND (1 - vector_distance_cos(m.embedding, vector32(?))) >= ?
         ORDER BY similarity DESC
         LIMIT ?
       `
 
-      params.push(threshold, limit)
+      params.push(queryVector, queryVector, threshold, limit)
 
       const result = await this.db.execute({
         sql: query,
@@ -126,6 +125,12 @@ export class VectorSearch {
       const whereConditions: string[] = ['m.is_deleted = 0']
       const params: any[] = []
 
+      // Add text search parameters first
+      const exactMatch = `%${query}%`
+      const fuzzyMatch = `%${query.split(' ').join('%')}%`
+
+      params.push(queryVector, queryVector, exactMatch, fuzzyMatch, queryVector, exactMatch, fuzzyMatch)
+
       if (userId) {
         whereConditions.push('m.user_id = ?')
         params.push(userId)
@@ -150,34 +155,37 @@ export class VectorSearch {
           m.run_id,
           m.created_at,
           m.updated_at,
-          vector_distance_cos(m.embedding, vector32('${queryVector}')) as distance,
-          (1 - vector_distance_cos(m.embedding, vector32('${queryVector}'))) as vector_similarity,
+          CASE 
+            WHEN m.embedding IS NULL THEN 2.0
+            ELSE vector_distance_cos(m.embedding, vector32(?))
+          END as distance,
+          CASE 
+            WHEN m.embedding IS NULL THEN 0.0
+            ELSE (1 - vector_distance_cos(m.embedding, vector32(?)))
+          END as vector_similarity,
           CASE 
             WHEN m.memory LIKE ? THEN 1.0
             WHEN m.memory LIKE ? THEN 0.8
             ELSE 0.0
           END as text_similarity,
           (
-            (1 - vector_distance_cos(m.embedding, vector32('${queryVector}'))) * 0.7 +
+            CASE 
+              WHEN m.embedding IS NULL THEN 0.0
+              ELSE (1 - vector_distance_cos(m.embedding, vector32(?))) * 0.7
+            END +
             CASE 
               WHEN m.memory LIKE ? THEN 1.0 * 0.3
               WHEN m.memory LIKE ? THEN 0.8 * 0.3
               ELSE 0.0
             END
           ) as combined_score
-        FROM vector_top_k('idx_memories_vector', vector32('${queryVector}'), ${limit * 3}) v
-        JOIN memories m ON m.rowid = v.rowid
+        FROM memories m
         ${whereClause}
         HAVING combined_score >= ?
         ORDER BY combined_score DESC
         LIMIT ?
       `
 
-      // Add text search parameters
-      const exactMatch = `%${query}%`
-      const fuzzyMatch = `%${query.split(' ').join('%')}%`
-
-      params.unshift(exactMatch, fuzzyMatch, exactMatch, fuzzyMatch)
       params.push(threshold, limit)
 
       const result = await this.db.execute({
@@ -227,13 +235,14 @@ export class VectorSearch {
           m.run_id,
           m.created_at,
           m.updated_at,
-          (1 - vector_distance_cos(m.embedding, vector32('${queryVector}'))) as similarity
+          (1 - vector_distance_cos(m.embedding, vector32(?))) as similarity
         FROM memories m
         WHERE m.is_deleted = 0
-        AND (1 - vector_distance_cos(m.embedding, vector32('${queryVector}'))) >= ?
+        AND m.embedding IS NOT NULL
+        AND (1 - vector_distance_cos(m.embedding, vector32(?))) >= ?
       `
 
-      const params: any[] = [threshold]
+      const params: any[] = [queryVector, queryVector, threshold]
 
       if (excludeId) {
         query += ' AND m.id != ?'
