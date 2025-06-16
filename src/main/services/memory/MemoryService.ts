@@ -107,13 +107,13 @@ class MemoryService {
     await this.client.execute(`CREATE INDEX IF NOT EXISTS idx_memory_history_memory_id ON memory_history(memory_id)`)
 
     // Create vector index for similarity search
-    try {
-      await this.client.execute(
-        `CREATE INDEX IF NOT EXISTS idx_memories_vector ON memories (libsql_vector_idx(embedding))`
-      )
-    } catch (error) {
-      console.warn('Vector indexing not supported in this libsql version:', error)
-    }
+    // try {
+    //   await this.client.execute(
+    //     `CREATE INDEX IF NOT EXISTS idx_memories_vector ON memories (libsql_vector_idx(embedding))`
+    //   )
+    // } catch (error) {
+    //   console.warn('Vector indexing not supported in this libsql version:', error)
+    // }
   }
 
   private generateHash(text: string): string {

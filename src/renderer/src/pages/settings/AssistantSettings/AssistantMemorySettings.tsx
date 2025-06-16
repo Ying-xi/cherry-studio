@@ -3,7 +3,7 @@ import { Box } from '@renderer/components/Layout'
 import MemoryService from '@renderer/services/MemoryService'
 import { selectMemoryConfig } from '@renderer/store/memory'
 import { Assistant, AssistantSettings } from '@renderer/types'
-import { Alert, Button, Card, Space, Switch, Tooltip, Typography } from 'antd'
+import { Alert, Button, Card, Form, Space, Switch, Tooltip, Typography } from 'antd'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
@@ -27,6 +27,7 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
     loading: true
   })
   const [settingsModalVisible, setSettingsModalVisible] = useState(false)
+  const [form] = Form.useForm()
   const memoryService = MemoryService.getInstance()
 
   // Load memory statistics for this assistant
@@ -140,7 +141,7 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
         visible={settingsModalVisible}
         onSubmit={() => setSettingsModalVisible(false)}
         onCancel={() => setSettingsModalVisible(false)}
-        form={undefined}
+        form={form}
       />
     </Container>
   )
