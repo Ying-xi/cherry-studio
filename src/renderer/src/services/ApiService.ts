@@ -17,6 +17,8 @@ import {
 } from '@renderer/config/prompts'
 import { getStoreSetting } from '@renderer/hooks/useSettings'
 import i18n from '@renderer/i18n'
+import store from '@renderer/store'
+import { selectMemoryConfig } from '@renderer/store/memory'
 import {
   Assistant,
   ExternalToolResult,
@@ -48,7 +50,7 @@ import {
 } from './AssistantService'
 import { getDefaultAssistant } from './AssistantService'
 import { processKnowledgeSearch } from './KnowledgeService'
-import MemoryService from './MemoryService'
+import { MemoryProcessor, memoryProcessor } from './MemoryProcessor'
 import {
   filterContextMessages,
   filterEmptyMessages,
@@ -341,23 +343,47 @@ export async function fetchChatCompletion({
     isGenerateImageModel(model) && (isSupportedDisableGenerationModel(model) ? assistant.enableGenerateImage : true)
 
   if (assistant.enableMemory) {
-    const memoryService = MemoryService.getInstance()
-    if (memoryService) {
+    try {
+      const memoryConfig = selectMemoryConfig(store.getState())
       const content = getMainTextContent(lastUserMessage)
-      const searchResults = await memoryService.search(content, {})
-      if (searchResults.results.length > 0) {
-        console.log('Search results:', searchResults.results)
-        const memoryContent = `Here are some relevant facts and context about user. Use this information to provide more personalized and contextually aware responses.
+
+      if (memoryConfig.embedderModel && memoryConfig.llmModel) {
+        // Search for relevant memories
+        const processorConfig = MemoryProcessor.getProcessorConfig(
+          memoryConfig,
+          assistant.id,
+          'default-user' // TODO: Get actual user ID from context
+        )
+
+        const relevantMemories = await memoryProcessor.searchRelevantMemories(
+          content,
+          processorConfig,
+          5 // Limit to top 5 most relevant memories
+        )
+
+        if (relevantMemories.length > 0) {
+          console.log('Found relevant memories:', relevantMemories)
+
+          // Format memories for context injection
+          const memoryContext = relevantMemories.map((memory) => `- ${memory.memory}`).join('\n')
+
+          const memoryContent = `Here are some relevant facts and context about the user from previous conversations. Use this information to provide more personalized and contextually aware responses:
 
 <user_memory>
-${JSON.stringify(searchResults.results)}
+${memoryContext}
 </user_memory>`
 
-        const mainTextBlock = createMainTextBlock(lastUserMessage.id, memoryContent, {
-          status: MessageBlockStatus.SUCCESS
-        })
-        lastUserMessage.blocks.push(mainTextBlock.id)
+          const mainTextBlock = createMainTextBlock(lastUserMessage.id, memoryContent, {
+            status: MessageBlockStatus.SUCCESS
+          })
+          lastUserMessage.blocks.push(mainTextBlock.id)
+        }
+      } else {
+        console.warn('Memory is enabled but embedding or LLM model is not configured')
       }
+    } catch (error) {
+      console.error('Error processing memory search:', error)
+      // Continue with conversation even if memory processing fails
     }
   }
 
@@ -383,6 +409,60 @@ ${JSON.stringify(searchResults.results)}
       streamOutput: assistant.settings?.streamOutput || false
     }
   )
+
+  // Post-conversation memory processing
+  if (assistant.enableMemory) {
+    await processConversationMemory(messages, assistant)
+  }
+}
+
+/**
+ * Process conversation for memory extraction and storage
+ */
+async function processConversationMemory(messages: Message[], assistant: Assistant) {
+  try {
+    const memoryConfig = selectMemoryConfig(store.getState())
+
+    if (!memoryConfig.embedderModel || !memoryConfig.llmModel) {
+      console.warn('Memory processing skipped: embedding or LLM model not configured')
+      return
+    }
+
+    // Convert messages to the format expected by memory processor
+    const conversationMessages = messages
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: getMainTextContent(msg) || ''
+      }))
+      .filter((msg) => msg.content.trim().length > 0)
+
+    if (conversationMessages.length < 2) {
+      // Need at least a user message and assistant response
+      return
+    }
+
+    const processorConfig = MemoryProcessor.getProcessorConfig(
+      memoryConfig,
+      assistant.id,
+      'default-user' // TODO: Get actual user ID from context
+    )
+
+    // Process the conversation in the background (don't await to avoid blocking UI)
+    memoryProcessor
+      .processConversation(conversationMessages, processorConfig)
+      .then((result) => {
+        if (result.facts.length > 0) {
+          console.log('Extracted facts from conversation:', result.facts)
+          console.log('Memory operations performed:', result.operations)
+        }
+      })
+      .catch((error) => {
+        console.error('Background memory processing failed:', error)
+      })
+  } catch (error) {
+    console.error('Error in post-conversation memory processing:', error)
+  }
 }
 
 interface FetchTranslateProps {
