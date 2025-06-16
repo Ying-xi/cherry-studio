@@ -215,7 +215,7 @@ const TranslatePage: FC = () => {
   const [bidirectionalPair, setBidirectionalPair] = useState<[string, string]>(['english', 'chinese'])
   const [settingsVisible, setSettingsVisible] = useState(false)
   const [detectedLanguage, setDetectedLanguage] = useState<string | null>(null)
-  const [sourceLanguage, setSourceLanguage] = useState<string>('auto') // 添加用户选择的源语言状态
+  const [sourceLanguage, setSourceLanguage] = useState<string>('auto')
   const contentContainerRef = useRef<HTMLDivElement>(null)
   const textAreaRef = useRef<TextAreaRef>(null)
   const outputTextRef = useRef<HTMLDivElement>(null)
@@ -293,8 +293,7 @@ const TranslatePage: FC = () => {
       let actualSourceLanguage: string
       if (sourceLanguage === 'auto') {
         actualSourceLanguage = await detectLanguage(text)
-        console.log('检测到的语言:', actualSourceLanguage)
-        setDetectedLanguage(actualSourceLanguage) // 更新检测到的语言
+        setDetectedLanguage(actualSourceLanguage)
       } else {
         actualSourceLanguage = sourceLanguage
       }
@@ -370,6 +369,9 @@ const TranslatePage: FC = () => {
     runAsyncFunction(async () => {
       const targetLang = await db.settings.get({ id: 'translate:target:language' })
       targetLang && setTargetLanguage(targetLang.value)
+
+      const sourceLang = await db.settings.get({ id: 'translate:source:language' })
+      sourceLang && setSourceLanguage(sourceLang.value)
 
       const bidirectionalPairSetting = await db.settings.get({ id: 'translate:bidirectional:pair' })
       if (bidirectionalPairSetting) {
@@ -509,12 +511,15 @@ const TranslatePage: FC = () => {
                 value={sourceLanguage}
                 style={{ width: 180 }}
                 optionFilterProp="label"
-                onChange={(value) => setSourceLanguage(value)}
+                onChange={(value) => {
+                  setSourceLanguage(value)
+                  db.settings.put({ id: 'translate:source:language', value })
+                }}
                 options={[
                   {
                     value: 'auto',
                     label: detectedLanguage
-                      ? `${t('translate.detected.language')}(${t(`languages.${detectedLanguage.toLowerCase()}`)})`
+                      ? `${t('translate.detected.language')} (${t(`languages.${detectedLanguage.toLowerCase()}`)})`
                       : t('translate.detected.language')
                   },
                   ...translateLanguageOptions().map((lang) => ({
