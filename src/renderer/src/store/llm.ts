@@ -21,7 +21,7 @@ export interface LlmState {
   defaultModel: Model
   topicNamingModel: Model
   translateModel: Model
-  quickAssistantModel: Model
+  quickAssistantId: string | null
   settings: LlmSettings
 }
 
@@ -143,6 +143,16 @@ export const INITIAL_PROVIDERS: Provider[] = [
     apiKey: '',
     apiHost: 'https://cephalon.cloud/user-center/v1/model',
     models: SYSTEM_MODELS.cephalon,
+    isSystem: true,
+    enabled: false
+  },
+  {
+    id: 'lanyun',
+    name: 'LANYUN',
+    type: 'openai',
+    apiKey: '',
+    apiHost: 'https://maas-api.lanyun.net',
+    models: SYSTEM_MODELS.lanyun,
     isSystem: true,
     enabled: false
   },
@@ -504,7 +514,7 @@ const initialState: LlmState = {
   defaultModel: SYSTEM_MODELS.defaultModel[0],
   topicNamingModel: SYSTEM_MODELS.defaultModel[1],
   translateModel: SYSTEM_MODELS.defaultModel[2],
-  quickAssistantModel: SYSTEM_MODELS.defaultModel[3],
+  quickAssistantId: null,
   providers: INITIAL_PROVIDERS,
   settings: {
     ollama: {
@@ -611,8 +621,9 @@ const llmSlice = createSlice({
     setTranslateModel: (state, action: PayloadAction<{ model: Model }>) => {
       state.translateModel = action.payload.model
     },
-    setQuickAssistantModel: (state, action: PayloadAction<{ model: Model }>) => {
-      state.quickAssistantModel = action.payload.model
+
+    setQuickAssistantId: (state, action: PayloadAction<string | null>) => {
+      state.quickAssistantId = action.payload
     },
     setOllamaKeepAliveTime: (state, action: PayloadAction<number>) => {
       state.settings.ollama.keepAliveTime = action.payload
@@ -651,7 +662,7 @@ export const {
   setDefaultModel,
   setTopicNamingModel,
   setTranslateModel,
-  setQuickAssistantModel,
+  setQuickAssistantId,
   setOllamaKeepAliveTime,
   setLMStudioKeepAliveTime,
   setGPUStackKeepAliveTime,
