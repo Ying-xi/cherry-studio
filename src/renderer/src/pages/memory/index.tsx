@@ -1,126 +1,228 @@
-import { FrownOutlined, MehOutlined, ReloadOutlined, SettingOutlined, SmileOutlined } from '@ant-design/icons'
-import { Button, Col, DatePicker, Form, Input, Layout, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
-import { useState } from 'react'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
+  SettingOutlined
+} from '@ant-design/icons'
+import MemoryService from '@renderer/services/MemoryService'
+import { MemoryItem } from '@renderer/types/memory'
+import {
+  Button,
+  Col,
+  DatePicker,
+  Form,
+  Input,
+  Layout,
+  message,
+  Modal,
+  Popconfirm,
+  Row,
+  Select,
+  Space,
+  Table,
+  Tag,
+  Tooltip,
+  Typography
+} from 'antd'
+import { ColumnsType } from 'antd/es/table'
+import dayjs from 'dayjs'
+import relativeTime from 'dayjs/plugin/relativeTime'
+import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import MemoriesSettingsModal from './settings-modal'
+
+dayjs.extend(relativeTime)
 
 const { Content } = Layout
 const { Title, Text } = Typography
 const { RangePicker } = DatePicker
 const { Option } = Select
+const { TextArea } = Input
 
-// Sample Data (replace with your actual data source)
-const initialData = [
-  {
-    key: '1',
-    time: '1 day ago',
-    userInfo: 'alex',
-    memory: 'Is allergic to nuts',
-    categories: ['health'],
-    feedback: ['happy', 'neutral'] // Using strings to map to icons
-  },
-  {
-    key: '2',
-    time: '1 day ago',
-    userInfo: 'alex',
-    memory: 'Is a vegetarian',
-    categories: ['user_preferences', 'food'],
-    feedback: ['happy', 'neutral', 'sad']
-  },
-  {
-    key: '3',
-    time: '1 day ago',
-    userInfo: 'alex',
-    memory: 'User name is Alex',
-    categories: ['personal_details'],
-    feedback: ['happy', 'neutral']
+interface AddMemoryModalProps {
+  visible: boolean
+  onCancel: () => void
+  onAdd: (memory: string, userId?: string) => Promise<void>
+}
+
+const AddMemoryModal: React.FC<AddMemoryModalProps> = ({ visible, onCancel, onAdd }) => {
+  const [form] = Form.useForm()
+  const [loading, setLoading] = useState(false)
+  const { t } = useTranslation()
+
+  const handleSubmit = async (values: { memory: string; userId?: string }) => {
+    setLoading(true)
+    try {
+      await onAdd(values.memory, values.userId)
+      form.resetFields()
+      onCancel()
+    } finally {
+      setLoading(false)
+    }
   }
-  // Add more memory objects here
-]
 
-const renderFeedbackIcons = (feedback) => (
-  <Space>
-    {feedback.includes('happy') && (
-      <Tooltip title="Happy">
-        <SmileOutlined style={{ color: '#52c41a' }} />
-      </Tooltip>
-    )}
-    {feedback.includes('neutral') && (
-      <Tooltip title="Neutral">
-        <MehOutlined style={{ color: '#faad14' }} />
-      </Tooltip>
-    )}
-    {feedback.includes('sad') && (
-      <Tooltip title="Sad">
-        <FrownOutlined style={{ color: '#f5222d' }} />
-      </Tooltip>
-    )}
-  </Space>
-)
+  return (
+    <Modal
+      title={t('memory.add_memory')}
+      open={visible}
+      onCancel={onCancel}
+      footer={[
+        <Button key="cancel" onClick={onCancel}>
+          {t('common.cancel')}
+        </Button>,
+        <Button key="submit" type="primary" loading={loading} onClick={() => form.submit()}>
+          {t('common.add')}
+        </Button>
+      ]}>
+      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form.Item
+          label={t('memory.memory_content')}
+          name="memory"
+          rules={[{ required: true, message: t('memory.please_enter_memory') }]}>
+          <TextArea rows={4} placeholder={t('memory.memory_placeholder')} />
+        </Form.Item>
+        <Form.Item label={t('memory.user_id')} name="userId">
+          <Input placeholder={t('memory.user_id_placeholder')} />
+        </Form.Item>
+      </Form>
+    </Modal>
+  )
+}
 
 const MemoriesPage = () => {
-  const [dataSource, setDataSource] = useState(initialData)
-  const [selectedRowKeys, setSelectedRowKeys] = useState([])
+  const { t } = useTranslation()
+  const [memories, setMemories] = useState<MemoryItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
   const [searchText, setSearchText] = useState('')
-  const [dateRange, setDateRange] = useState(null)
-  const [selectedUser, setSelectedUser] = useState('all') // 'all' or a specific user ID
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
+  const [selectedUser, setSelectedUser] = useState('all')
   const [settingsModalVisible, setSettingsModalVisible] = useState(false)
+  const [addMemoryModalVisible, setAddMemoryModalVisible] = useState(false)
+  // const [editingMemory, setEditingMemory] = useState<MemoryItem | null>(null)
   const [form] = Form.useForm()
+  const [uniqueUsers, setUniqueUsers] = useState<string[]>([])
+  const memoryService = MemoryService.getInstance()
 
-  // --- Filter Logic (Basic examples, expand as needed) ---
-  const handleSearch = (e) => {
-    const value = e.target.value.toLowerCase()
-    setSearchText(value)
-    filterData(value, dateRange, selectedUser)
-  }
+  // Load memories on mount and when config changes
+  const loadMemories = useCallback(async () => {
+    setLoading(true)
+    try {
+      const result = await memoryService.list({ limit: 1000 })
+      setMemories(result.results || [])
 
-  const handleDateChange = (dates) => {
-    setDateRange(dates)
-    filterData(searchText, dates, selectedUser)
-  }
+      // Extract unique user IDs
+      const users = new Set<string>()
+      result.results?.forEach((memory) => {
+        if (memory.metadata?.userId) {
+          users.add(memory.metadata.userId)
+        }
+      })
+      setUniqueUsers(Array.from(users))
+    } catch (error) {
+      console.error('Failed to load memories:', error)
+      message.error(t('memory.load_failed'))
+    } finally {
+      setLoading(false)
+    }
+  }, [memoryService, t])
 
-  const handleUserChange = (value) => {
-    setSelectedUser(value)
-    filterData(searchText, dateRange, value)
-  }
+  useEffect(() => {
+    loadMemories()
+  }, [loadMemories])
 
-  const filterData = (currentSearchText, currentDateRange, currentSelectedUser) => {
-    let filteredData = initialData
-
+  // Filter memories based on search criteria
+  const filteredMemories = memories.filter((memory) => {
     // Search text filter
-    if (currentSearchText) {
-      filteredData = filteredData.filter((item) =>
-        Object.values(item).some((val) => String(val).toLowerCase().includes(currentSearchText))
-      )
+    if (searchText && !memory.memory.toLowerCase().includes(searchText.toLowerCase())) {
+      return false
     }
 
-    // Date range filter (This is a placeholder, implement actual date filtering logic)
-    if (currentDateRange && currentDateRange.length === 2) {
-      // Example: filter based on 'time' if it were a date object
-      // For '1 day ago' type strings, you'd need more complex parsing
-      console.log('Date range filtering not fully implemented for string dates.')
+    // Date range filter
+    if (dateRange && dateRange.length === 2 && memory.createdAt) {
+      const memoryDate = dayjs(memory.createdAt)
+      if (!memoryDate.isAfter(dateRange[0]) || !memoryDate.isBefore(dateRange[1])) {
+        return false
+      }
     }
 
     // User filter
-    if (currentSelectedUser !== 'all') {
-      filteredData = filteredData.filter((item) => item.userInfo === currentSelectedUser)
+    if (selectedUser !== 'all' && memory.metadata?.userId !== selectedUser) {
+      return false
     }
 
-    setDataSource(filteredData)
+    return true
+  })
+
+  const handleSearch = (value: string) => {
+    setSearchText(value)
+  }
+
+  const handleDateChange = (dates: any) => {
+    if (dates && dates[0] && dates[1]) {
+      setDateRange([dates[0], dates[1]])
+    } else {
+      setDateRange(null)
+    }
+  }
+
+  const handleUserChange = (value: string) => {
+    setSelectedUser(value)
   }
 
   const resetFilters = () => {
     setSearchText('')
     setDateRange(null)
     setSelectedUser('all')
-    setDataSource(initialData)
-    // Clear AntD component states if necessary (e.g., Input value)
-    // For controlled components, clearing the state variable is enough.
   }
 
-  const handleSettingsSubmit = (values) => {
-    console.log('Settings saved:', values)
-    // Here you would typically save the settings to your backend or local storage
+  const handleAddMemory = async (memory: string, userId?: string) => {
+    try {
+      const metadata = userId ? { userId } : undefined
+      await memoryService.add(memory, { metadata })
+      message.success(t('memory.add_success'))
+      await loadMemories()
+    } catch (error) {
+      console.error('Failed to add memory:', error)
+      message.error(t('memory.add_failed'))
+    }
+  }
+
+  const handleDeleteMemory = async (id: string) => {
+    try {
+      await memoryService.delete(id)
+      message.success(t('memory.delete_success'))
+      await loadMemories()
+    } catch (error) {
+      console.error('Failed to delete memory:', error)
+      message.error(t('memory.delete_failed'))
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedRowKeys.length === 0) return
+
+    Modal.confirm({
+      title: t('memory.delete_confirm_title'),
+      content: t('memory.delete_confirm_content', { count: selectedRowKeys.length }),
+      onOk: async () => {
+        try {
+          await Promise.all(selectedRowKeys.map((id) => memoryService.delete(id)))
+          message.success(t('memory.delete_success'))
+          setSelectedRowKeys([])
+          await loadMemories()
+        } catch (error) {
+          console.error('Failed to delete memories:', error)
+          message.error(t('memory.delete_failed'))
+        }
+      }
+    })
+  }
+
+  const handleSettingsSubmit = () => {
     setSettingsModalVisible(false)
   }
 
@@ -129,67 +231,75 @@ const MemoriesPage = () => {
     form.resetFields()
   }
 
-  const columns = [
+  const columns: ColumnsType<MemoryItem> = [
     {
-      title: 'Time',
-      dataIndex: 'time',
-      key: 'time',
+      title: t('memory.time'),
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 150,
+      render: (text: string) => (text ? dayjs(text).fromNow() : '-'),
       sorter: (a, b) => {
-        // Basic sorter, for '1 day ago' you'd need custom logic
-        // This won't sort "1 day ago" correctly without parsing.
-        // For real date objects, this would be: new Date(a.time) - new Date(b.time)
-        return a.time.localeCompare(b.time)
+        if (!a.createdAt || !b.createdAt) return 0
+        return dayjs(a.createdAt).unix() - dayjs(b.createdAt).unix()
       }
     },
     {
-      title: 'User Info',
-      dataIndex: 'userInfo',
-      key: 'userInfo',
-      render: (text) => <Tag color="blue">{text}</Tag>,
-      filters: [
-        // Example filters, populate dynamically if needed
-        { text: 'alex', value: 'alex' }
-        // Add other user names
-      ],
-      onFilter: (value, record) => record.userInfo.indexOf(value) === 0
+      title: t('memory.user'),
+      dataIndex: ['metadata', 'userId'],
+      key: 'userId',
+      width: 120,
+      render: (userId: string) => (userId ? <Tag color="blue">{userId}</Tag> : <Tag color="default">-</Tag>),
+      filters: uniqueUsers.map((user) => ({ text: user, value: user })),
+      onFilter: (value, record) => record.metadata?.userId === value
     },
     {
-      title: 'Memory',
+      title: t('memory.content'),
       dataIndex: 'memory',
-      key: 'memory'
-    },
-    {
-      title: 'Categories',
-      dataIndex: 'categories',
-      key: 'categories',
-      render: (categories) => (
-        <>
-          {categories.map((category) => {
-            let color = category.length > 10 ? 'geekblue' : 'green'
-            if (category === 'health') color = 'volcano'
-            if (category === 'food') color = 'gold'
-            if (category === 'personal_details') color = 'purple'
-            return (
-              <Tag color={color} key={category}>
-                {category.toUpperCase()}
-              </Tag>
-            )
-          })}
-        </>
+      key: 'memory',
+      ellipsis: true,
+      render: (text: string) => (
+        <Tooltip title={text}>
+          <span>{text}</span>
+        </Tooltip>
       )
-      // Add filter capabilities for categories if needed
     },
     {
-      title: 'Feedback',
-      dataIndex: 'feedback',
-      key: 'feedback',
-      render: renderFeedbackIcons
+      title: t('memory.score'),
+      dataIndex: 'score',
+      key: 'score',
+      width: 80,
+      render: (score: number) => (score ? score.toFixed(3) : '-'),
+      sorter: (a, b) => (a.score || 0) - (b.score || 0)
+    },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 120,
+      render: (_, record) => (
+        <Space>
+          <Tooltip title={t('common.edit')}>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => console.log('Edit memory:', record)}
+            />
+          </Tooltip>
+          <Popconfirm
+            title={t('memory.delete_confirm')}
+            onConfirm={() => handleDeleteMemory(record.id)}
+            okText={t('common.yes')}
+            cancelText={t('common.no')}>
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      )
     }
   ]
 
   const rowSelection = {
     selectedRowKeys,
-    onChange: (keys) => setSelectedRowKeys(keys)
+    onChange: (keys: React.Key[]) => setSelectedRowKeys(keys as string[])
   }
 
   return (
@@ -200,21 +310,22 @@ const MemoriesPage = () => {
           <Row justify="space-between" align="middle">
             <Col>
               <Title level={2} style={{ margin: 0 }}>
-                Memories
+                {t('memory.memories')}
               </Title>
-              <Text type="secondary">A summary of your memories</Text>
+              <Text type="secondary">
+                {t('memory.memories_description', { count: filteredMemories.length, total: memories.length })}
+              </Text>
             </Col>
             <Col>
               <Space>
-                <Tooltip title="Settings">
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddMemoryModalVisible(true)}>
+                  {t('memory.add_memory')}
+                </Button>
+                <Tooltip title={t('common.settings')}>
                   <Button shape="circle" icon={<SettingOutlined />} onClick={() => setSettingsModalVisible(true)} />
                 </Tooltip>
-                <Tooltip title="Refresh">
-                  <Button
-                    shape="circle"
-                    icon={<ReloadOutlined />}
-                    onClick={() => filterData(searchText, dateRange, selectedUser)}
-                  />
+                <Tooltip title={t('common.refresh')}>
+                  <Button shape="circle" icon={<ReloadOutlined />} loading={loading} onClick={loadMemories} />
                 </Tooltip>
               </Space>
             </Col>
@@ -223,20 +334,43 @@ const MemoriesPage = () => {
           {/* Filter Section */}
           <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} md={8} lg={6}>
-              <Input placeholder="Search memories..." value={searchText} onChange={handleSearch} allowClear />
+              <Input
+                placeholder={t('memory.search_placeholder')}
+                value={searchText}
+                onChange={(e) => handleSearch(e.target.value)}
+                allowClear
+                prefix={<SearchOutlined />}
+              />
             </Col>
             <Col xs={24} sm={12} md={8} lg={6}>
-              <RangePicker style={{ width: '100%' }} value={dateRange} onChange={handleDateChange} />
+              <RangePicker
+                style={{ width: '100%' }}
+                value={dateRange}
+                onChange={handleDateChange}
+                placeholder={[t('memory.start_date'), t('memory.end_date')]}
+              />
             </Col>
             <Col xs={24} sm={12} md={8} lg={6}>
               <Select defaultValue="all" style={{ width: '100%' }} onChange={handleUserChange} value={selectedUser}>
-                <Option value="all">All Users (1 of 1)</Option> {/* Make this dynamic */}
-                <Option value="alex">Alex</Option>
-                {/* Add other users dynamically */}
+                <Option value="all">
+                  {t('memory.all_users')} ({uniqueUsers.length} {t('memory.users')})
+                </Option>
+                {uniqueUsers.map((user) => (
+                  <Option key={user} value={user}>
+                    {user}
+                  </Option>
+                ))}
               </Select>
             </Col>
             <Col xs={24} sm={12} md={24} lg={6} style={{ textAlign: 'right' }}>
-              <Button onClick={resetFilters}>Reset Filters</Button>
+              <Space>
+                {selectedRowKeys.length > 0 && (
+                  <Button danger onClick={handleDeleteSelected}>
+                    {t('memory.delete_selected')} ({selectedRowKeys.length})
+                  </Button>
+                )}
+                <Button onClick={resetFilters}>{t('memory.reset_filters')}</Button>
+              </Space>
             </Col>
           </Row>
 
@@ -244,11 +378,30 @@ const MemoriesPage = () => {
           <Table
             rowSelection={rowSelection}
             columns={columns}
-            dataSource={dataSource}
-            pagination={{ pageSize: 10, showSizeChanger: true }} // Example pagination
+            dataSource={filteredMemories}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                t('memory.pagination_total', {
+                  start: range[0],
+                  end: range[1],
+                  total
+                })
+            }}
             bordered
           />
         </Space>
+
+        {/* Add Memory Modal */}
+        <AddMemoryModal
+          visible={addMemoryModalVisible}
+          onCancel={() => setAddMemoryModalVisible(false)}
+          onAdd={handleAddMemory}
+        />
 
         {/* Settings Modal */}
         <MemoriesSettingsModal
