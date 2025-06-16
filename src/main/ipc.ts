@@ -271,7 +271,7 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
     return await memoryService.add(messages, config)
   })
   ipcMain.handle(IpcChannel.Memory_Search, async (_, query, config) => {
-    return await memoryService.search(query, config)
+    return await memoryService.vectorSearch(query, config)
   })
   ipcMain.handle(IpcChannel.Memory_List, async (_, config) => {
     return await memoryService.list(config)

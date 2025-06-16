@@ -4,6 +4,7 @@ import MemoryService from '@renderer/services/MemoryService'
 import { selectMemoryConfig } from '@renderer/store/memory'
 import { Assistant, AssistantSettings } from '@renderer/types'
 import { Alert, Button, Card, Space, Switch, Tooltip, Typography } from 'antd'
+import { useForm } from 'antd/es/form/Form'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSelector } from 'react-redux'
@@ -28,6 +29,7 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
   })
   const [settingsModalVisible, setSettingsModalVisible] = useState(false)
   const memoryService = MemoryService.getInstance()
+  const form = useForm()
 
   // Load memory statistics for this assistant
   const loadMemoryStats = useCallback(async () => {
@@ -140,7 +142,7 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
         visible={settingsModalVisible}
         onSubmit={() => setSettingsModalVisible(false)}
         onCancel={() => setSettingsModalVisible(false)}
-        form={undefined}
+        form={form}
       />
     </Container>
   )
