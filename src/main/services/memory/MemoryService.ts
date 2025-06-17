@@ -1,33 +1,28 @@
 import { Client, createClient } from '@libsql/client'
-import { Model } from '@types'
+import {
+  AddMemoryOptions,
+  AssistantMessage,
+  MemoryConfig,
+  MemoryHistoryItem,
+  MemoryItem,
+  MemoryListOptions,
+  MemorySearchOptions,
+  MemorySearchResult
+} from '@types'
 import crypto from 'crypto'
 import { app } from 'electron'
 import path from 'path'
 import { v4 as uuid4 } from 'uuid'
 
 import { EmbeddingService } from './EmbeddingService'
-import {
-  AddMemoryOptions,
-  GetAllMemoryOptions,
-  MemoryHistoryItem,
-  MemoryItem,
-  SearchMemoryOptions,
-  SearchResult
-} from './types'
 import { VectorSearch } from './VectorSearch'
 
 class MemoryService {
   private static instance: MemoryService | null = null
-  private client: Client | null = null
-  private isInitialized = false
+  private config: MemoryConfig | null = null
+  private client: Client
   private embeddingService: EmbeddingService
-  private vectorSearchInstance: VectorSearch | null = null
-  private currentEmbeddingModel: Model | null = null
-
-  private constructor() {
-    // Private constructor for singleton pattern
-    this.embeddingService = new EmbeddingService()
-  }
+  private vectorSearchService: VectorSearch
 
   public static getInstance(): MemoryService {
     if (!MemoryService.instance) {
@@ -36,9 +31,21 @@ class MemoryService {
     return MemoryService.instance
   }
 
-  public async init(): Promise<void> {
-    if (this.isInitialized) return
+  /**
+   * Update memory service configuration
+   */
+  public async updateConfig(config: MemoryConfig): Promise<void> {
+    try {
+      this.config = config
+      MemoryService.instance = this // Update singleton instance
+      console.log('Memory service configuration updated successfully')
+    } catch (error) {
+      console.error('Failed to update memory service configuration:', error)
+      throw error
+    }
+  }
 
+  public constructor() {
     try {
       // Create database file in userData directory
       const userDataPath = app.getPath('userData')
@@ -48,13 +55,9 @@ class MemoryService {
         url: `file:${dbPath}`
       })
 
-      // Create tables
-      await this.createTables()
-
-      // Initialize vector search
-      this.vectorSearchInstance = new VectorSearch(this.client)
-
-      this.isInitialized = true
+      // Initialize vector search and embedding service
+      this.vectorSearchService = new VectorSearch(this.client)
+      this.embeddingService = new EmbeddingService()
 
       console.log('MemoryService initialized successfully')
     } catch (error) {
@@ -120,45 +123,14 @@ class MemoryService {
     return crypto.createHash('sha256').update(text.trim().toLowerCase()).digest('hex')
   }
 
-  // Vector utility methods for future implementation (Phase 2)
-  /*
-  private serializeEmbedding(embedding: number[]): Buffer {
-    // Convert float array to binary buffer
-    const buffer = Buffer.allocUnsafe(embedding.length * 4)
-    embedding.forEach((value, index) => {
-      buffer.writeFloatLE(value, index * 4)
-    })
-    return buffer
-  }
-
-  private deserializeEmbedding(buffer: Buffer): number[] {
-    // Convert binary buffer back to float array
-    const embedding: number[] = []
-    for (let i = 0; i < buffer.length; i += 4) {
-      embedding.push(buffer.readFloatLE(i))
+  private checkInitialized(): void {
+    if (!this.config) {
+      throw new Error('MemoryService not initialized. Call updateConfig() first.')
     }
-    return embedding
   }
 
-  private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0
-
-    let dotProduct = 0
-    let normA = 0
-    let normB = 0
-
-    for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i]
-      normA += a[i] * a[i]
-      normB += b[i] * b[i]
-    }
-
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB))
-  }
-  */
-
-  public async add(messages: string | any[], config: AddMemoryOptions): Promise<SearchResult> {
-    if (!this.client) throw new Error('Database client not initialized')
+  public async add(messages: string | AssistantMessage[], options: AddMemoryOptions): Promise<MemorySearchResult> {
+    this.checkInitialized()
 
     try {
       const memories: MemoryItem[] = []
@@ -201,14 +173,23 @@ class MemoryService {
 
       // Create new memory
       const memoryId = uuid4()
-      const metadata = JSON.stringify(config.metadata || {})
+      const metadata = JSON.stringify(options.metadata || {})
 
       // Generate embedding if model is configured
       let embeddingVector: string | null = null
-      if (this.currentEmbeddingModel) {
+      const embeddingModel = this.config?.embedderModel
+      const provider = this.config?.embedderProvider
+      if (embeddingModel) {
         try {
-          const embedding = await this.generateEmbedding(messageText)
-          embeddingVector = this.embeddingToVector32(embedding)
+          const result = await this.embeddingService.generateEmbedding(messageText, {
+            model: embeddingModel.id,
+            provider: embeddingModel.provider,
+            apiKey: provider?.apiKey || '',
+            apiVersion: provider?.apiVersion,
+            baseURL: provider?.apiHost || '',
+            dimensions: EmbeddingService.getModelDimensions(embeddingModel.id)
+          })
+          embeddingVector = this.embeddingToVector32(result.embedding)
         } catch (error) {
           console.warn('Failed to generate embedding, storing without vector:', error)
         }
@@ -219,31 +200,14 @@ class MemoryService {
           sql: `INSERT INTO memories
                 (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at)
                 VALUES (?, ?, ?, vector32(?), ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          args: [
-            memoryId,
-            messageText,
-            hash,
-            embeddingVector,
-            metadata,
-            config.userId || null,
-            config.agentId || null,
-            config.runId || null
-          ]
+          args: [memoryId, messageText, hash, embeddingVector, metadata]
         })
       } else {
         await this.client.execute({
           sql: `INSERT INTO memories
                 (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          args: [
-            memoryId,
-            messageText,
-            hash,
-            metadata,
-            config.userId || null,
-            config.agentId || null,
-            config.runId || null
-          ]
+          args: [memoryId, messageText, hash, metadata]
         })
       }
 
@@ -256,7 +220,7 @@ class MemoryService {
         hash,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        metadata: config.metadata || {}
+        metadata: options.metadata || {}
       }
 
       memories.push(newMemory)
@@ -268,7 +232,7 @@ class MemoryService {
     }
   }
 
-  public async search(query: string, config: SearchMemoryOptions): Promise<SearchResult> {
+  public async search(query: string, options: MemorySearchOptions): Promise<MemorySearchResult> {
     if (!this.client) throw new Error('Database client not initialized')
 
     try {
@@ -286,24 +250,24 @@ class MemoryService {
       }
 
       // Add filters
-      if (config.userId) {
+      if (options.userId) {
         sql += ` AND user_id = ?`
-        args.push(config.userId)
+        args.push(options.userId)
       }
-      if (config.agentId) {
+      if (options.agentId) {
         sql += ` AND agent_id = ?`
-        args.push(config.agentId)
+        args.push(options.agentId)
       }
-      if (config.runId) {
+      if (options.runId) {
         sql += ` AND run_id = ?`
-        args.push(config.runId)
+        args.push(options.runId)
       }
 
       // Add ordering and limit
       sql += ` ORDER BY created_at DESC`
-      if (config.limit) {
+      if (options.limit) {
         sql += ` LIMIT ?`
-        args.push(config.limit)
+        args.push(options.limit)
       }
 
       const result = await this.client.execute({ sql, args })
@@ -325,7 +289,7 @@ class MemoryService {
     }
   }
 
-  public async list(config?: GetAllMemoryOptions): Promise<SearchResult> {
+  public async list(options?: MemoryListOptions): Promise<MemorySearchResult> {
     if (!this.client) throw new Error('Database client not initialized')
 
     try {
@@ -337,20 +301,20 @@ class MemoryService {
       const args: any[] = []
 
       // Add filters
-      if (config?.userId) {
+      if (options?.userId) {
         sql += ` AND user_id = ?`
-        args.push(config.userId)
+        args.push(options.userId)
       }
-      if (config?.agentId) {
+      if (options?.agentId) {
         sql += ` AND agent_id = ?`
-        args.push(config.agentId)
+        args.push(options.agentId)
       }
 
       // Add ordering and limit
       sql += ` ORDER BY created_at DESC`
-      if (config?.limit) {
+      if (options?.limit) {
         sql += ` LIMIT ?`
-        args.push(config.limit)
+        args.push(options.limit)
       }
 
       const result = await this.client.execute({ sql, args })
@@ -419,7 +383,7 @@ class MemoryService {
 
       // Generate new embedding if model is configured
       let embeddingVector: string | null = null
-      if (this.currentEmbeddingModel) {
+      if (this.config?.embedderModel) {
         try {
           const embedding = await this.generateEmbedding(memory)
           embeddingVector = this.embeddingToVector32(embedding)
@@ -453,7 +417,7 @@ class MemoryService {
     }
   }
 
-  public async getHistory(memoryId: string): Promise<MemoryHistoryItem[]> {
+  public async get(memoryId: string): Promise<MemoryHistoryItem[]> {
     if (!this.client) throw new Error('Database client not initialized')
 
     try {
@@ -516,39 +480,29 @@ class MemoryService {
   public async close(): Promise<void> {
     if (this.client) {
       this.client.close()
-      this.client = null
-      this.isInitialized = false
     }
   }
-
-  /**
-   * Configure the embedding model to use
-   */
-  public setEmbeddingModel(model: Model, provider?: { apiKey: string; baseURL: string; apiVersion?: string }): void {
-    this.currentEmbeddingModel = model
-    this.currentEmbeddingProvider = provider
-  }
-
-  private currentEmbeddingProvider?: { apiKey: string; baseURL: string; apiVersion?: string }
 
   /**
    * Generate embedding for text using configured model
    */
   public async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.currentEmbeddingModel) {
-      throw new Error('No embedding model configured. Call setEmbeddingModel() first.')
+    if (!this.config?.embedderModel) {
+      throw new Error('No embedding model configured. Call updateConfig() first.')
     }
 
     try {
-      const provider = this.currentEmbeddingProvider || { apiKey: '', baseURL: '' }
-
+      const provider = this.config?.embedderProvider
+      if (!provider) {
+        throw new Error('No embedding provider configured. Call updateConfig() with a provider.')
+      }
       const result = await this.embeddingService.generateEmbedding(text, {
-        model: this.currentEmbeddingModel.id,
-        provider: this.currentEmbeddingModel.provider,
+        model: this.config.embedderModel.id,
+        provider: this.config.embedderModel.provider,
         apiKey: provider.apiKey,
         apiVersion: provider.apiVersion,
-        baseURL: provider.baseURL,
-        dimensions: EmbeddingService.getModelDimensions(this.currentEmbeddingModel.id)
+        baseURL: provider.apiHost,
+        dimensions: EmbeddingService.getModelDimensions(this.config.embedderModel.id)
       })
       return result.embedding
     } catch (error) {
@@ -562,270 +516,6 @@ class MemoryService {
    */
   private embeddingToVector32(embedding: number[]): string {
     return `[${embedding.join(',')}]`
-  }
-
-  /**
-   * Search memories using vector similarity
-   */
-  public async vectorSearch(
-    query: string,
-    options: SearchMemoryOptions & { embeddingModel?: Model; provider?: any }
-  ): Promise<SearchResult> {
-    if (!this.vectorSearchInstance) {
-      throw new Error('Vector search not initialized')
-    }
-
-    try {
-      // Use provided model or current model
-      const model = options.embeddingModel || this.currentEmbeddingModel
-      if (!model) {
-        throw new Error('No embedding model configured for vector search')
-      }
-
-      // Get provider info
-      const provider = options.provider || { apiKey: '', baseURL: '' }
-
-      // Generate query embedding
-      const queryEmbedding = await this.embeddingService.generateEmbedding(query, {
-        model: model.id,
-        provider: model.provider,
-        apiKey: provider.apiKey || '',
-        apiVersion: provider.apiVersion,
-        baseURL: provider.baseURL || '',
-        dimensions: EmbeddingService.getModelDimensions(model.id)
-      })
-
-      // Perform vector search
-      const searchResult = await this.vectorSearchInstance.searchByVector(queryEmbedding.embedding, {
-        limit: options.limit,
-        threshold: options.threshold,
-        userId: options.userId,
-        agentId: options.agentId
-      })
-
-      return {
-        results: searchResult.items
-      }
-    } catch (error) {
-      console.error('Error in vector search:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Hybrid search combining text and vector similarity
-   */
-  public async hybridSearch(
-    query: string,
-    options: SearchMemoryOptions & { embeddingModel?: Model; provider?: any }
-  ): Promise<SearchResult> {
-    if (!this.vectorSearchInstance) {
-      throw new Error('Vector search not initialized')
-    }
-
-    try {
-      // Use provided model or current model
-      const model = options.embeddingModel || this.currentEmbeddingModel
-      if (!model) {
-        throw new Error('No embedding model configured for hybrid search')
-      }
-
-      // Get provider info
-      const provider = options.provider || { apiKey: '', baseURL: '' }
-
-      // Generate query embedding
-      const queryEmbedding = await this.embeddingService.generateEmbedding(query, {
-        model: model.id,
-        provider: model.provider,
-        apiKey: provider.apiKey || '',
-        apiVersion: provider.apiVersion,
-        baseURL: provider.baseURL || '',
-        dimensions: EmbeddingService.getModelDimensions(model.id)
-      })
-
-      // Perform hybrid search
-      const searchResult = await this.vectorSearchInstance.hybridSearch(query, queryEmbedding.embedding, {
-        limit: options.limit,
-        threshold: options.threshold,
-        userId: options.userId,
-        agentId: options.agentId
-      })
-
-      return {
-        results: searchResult.items
-      }
-    } catch (error) {
-      console.error('Error in hybrid search:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Add multiple memories in batch with embeddings
-   */
-  public async addBatchMemories(
-    memories: Array<{ text: string; options: AddMemoryOptions }>,
-    embeddingModel?: Model
-  ): Promise<SearchResult> {
-    if (!this.client) throw new Error('Database client not initialized')
-
-    try {
-      const model = embeddingModel || this.currentEmbeddingModel
-      const results: MemoryItem[] = []
-
-      // Extract texts for batch embedding generation
-      const texts = memories.map((m) => m.text)
-      let embeddings: number[][] = []
-
-      // Generate embeddings in batch if model is configured
-      if (model) {
-        try {
-          const provider = this.currentEmbeddingProvider || { apiKey: '', baseURL: '' }
-
-          const batchResult = await this.embeddingService.generateBatchEmbeddings(texts, {
-            model: model.id,
-            provider: model.provider,
-            apiKey: provider.apiKey,
-            apiVersion: provider.apiVersion,
-            baseURL: provider.baseURL,
-            dimensions: EmbeddingService.getModelDimensions(model.id),
-            batchSize: 50 // Process in batches of 50
-          })
-          embeddings = batchResult.embeddings
-        } catch (error) {
-          console.warn('Failed to generate batch embeddings, storing without vectors:', error)
-        }
-      }
-
-      // Process each memory
-      for (let i = 0; i < memories.length; i++) {
-        const { text, options } = memories[i]
-        const memoryId = uuid4()
-        const hash = this.generateHash(text)
-        const metadata = JSON.stringify(options.metadata || {})
-
-        // Check for duplicate
-        const existing = await this.client.execute({
-          sql: 'SELECT id FROM memories WHERE hash = ? AND is_deleted = 0',
-          args: [hash]
-        })
-
-        if (existing.rows.length > 0) {
-          continue // Skip duplicates
-        }
-
-        // Get embedding for this memory
-        const embedding = embeddings[i]
-        const embeddingVector = embedding ? this.embeddingToVector32(embedding) : null
-
-        // Insert memory
-        if (embeddingVector) {
-          await this.client.execute({
-            sql: `INSERT INTO memories
-                  (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at)
-                  VALUES (?, ?, ?, vector32(?), ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-            args: [
-              memoryId,
-              text,
-              hash,
-              embeddingVector,
-              metadata,
-              options.userId || null,
-              options.agentId || null,
-              options.runId || null
-            ]
-          })
-        } else {
-          await this.client.execute({
-            sql: `INSERT INTO memories
-                  (id, memory, hash, metadata, user_id, agent_id, run_id, created_at, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-            args: [
-              memoryId,
-              text,
-              hash,
-              metadata,
-              options.userId || null,
-              options.agentId || null,
-              options.runId || null
-            ]
-          })
-        }
-
-        // Add to history
-        await this.addHistory(memoryId, null, text, 'ADD')
-
-        // Add to results
-        results.push({
-          id: memoryId,
-          memory: text,
-          hash,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          metadata: options.metadata || {}
-        })
-      }
-
-      return { results }
-    } catch (error) {
-      console.error('Error adding batch memories:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Find similar memories to avoid duplicates
-   */
-  public async findSimilarMemories(
-    text: string,
-    threshold: number = 0.9,
-    embeddingModel?: Model
-  ): Promise<MemoryItem[]> {
-    if (!this.vectorSearchInstance) {
-      throw new Error('Vector search not initialized')
-    }
-
-    try {
-      const model = embeddingModel || this.currentEmbeddingModel
-      if (!model) {
-        return [] // No similarity search without embedding model
-      }
-
-      // Generate embedding for the text
-      const provider = this.currentEmbeddingProvider || { apiKey: '', baseURL: '' }
-
-      const result = await this.embeddingService.generateEmbedding(text, {
-        model: model.id,
-        provider: model.provider,
-        apiKey: provider.apiKey,
-        apiVersion: provider.apiVersion,
-        baseURL: provider.baseURL,
-        dimensions: EmbeddingService.getModelDimensions(model.id)
-      })
-
-      // Find similar memories
-      return await this.vectorSearchInstance.findSimilarMemories(result.embedding, threshold)
-    } catch (error) {
-      console.error('Error finding similar memories:', error)
-      return []
-    }
-  }
-
-  /**
-   * Get embedding statistics and cache info
-   */
-  public getEmbeddingStats(): { cacheStats: any; currentModel: string | null } {
-    return {
-      cacheStats: this.embeddingService.getCacheStats(),
-      currentModel: this.currentEmbeddingModel?.id || null
-    }
-  }
-
-  /**
-   * Clear embedding cache to free memory
-   */
-  public clearEmbeddingCache(): void {
-    this.embeddingService.clearCache()
   }
 }
 

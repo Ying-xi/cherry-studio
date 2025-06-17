@@ -2,7 +2,20 @@ import type { ExtractChunkData } from '@cherrystudio/embedjs-interfaces'
 import { electronAPI } from '@electron-toolkit/preload'
 import { FeedUrl } from '@shared/config/constant'
 import { IpcChannel } from '@shared/IpcChannel'
-import { FileType, KnowledgeBaseParams, KnowledgeItem, MCPServer, Shortcut, ThemeMode, WebDavConfig } from '@types'
+import {
+  AddMemoryOptions,
+  AssistantMessage,
+  FileType,
+  KnowledgeBaseParams,
+  KnowledgeItem,
+  MCPServer,
+  MemoryConfig,
+  MemoryListOptions,
+  MemorySearchOptions,
+  Shortcut,
+  ThemeMode,
+  WebDavConfig
+} from '@types'
 import { contextBridge, ipcRenderer, OpenDialogOptions, shell, webUtils } from 'electron'
 import { Notification } from 'src/renderer/src/types/notification'
 import { CreateDirectoryOptions } from 'webdav'
@@ -117,14 +130,17 @@ const api = {
       ipcRenderer.invoke(IpcChannel.KnowledgeBase_Rerank, { search, base, results })
   },
   memory: {
-    add: (messages: string | any[], config: any) => ipcRenderer.invoke(IpcChannel.Memory_Add, messages, config),
-    search: (query: string, config: any) => ipcRenderer.invoke(IpcChannel.Memory_Search, query, config),
-    list: (config?: any) => ipcRenderer.invoke(IpcChannel.Memory_List, config),
+    add: (messages: string | AssistantMessage[], options?: AddMemoryOptions) =>
+      ipcRenderer.invoke(IpcChannel.Memory_Add, messages, options),
+    search: (query: string, options: MemorySearchOptions) =>
+      ipcRenderer.invoke(IpcChannel.Memory_Search, query, options),
+    list: (options?: MemoryListOptions) => ipcRenderer.invoke(IpcChannel.Memory_List, options),
     delete: (id: string) => ipcRenderer.invoke(IpcChannel.Memory_Delete, id),
     update: (id: string, memory: string, metadata?: Record<string, any>) =>
       ipcRenderer.invoke(IpcChannel.Memory_Update, id, memory, metadata),
-    getHistory: (memoryId: string) => ipcRenderer.invoke(IpcChannel.Memory_GetHistory, memoryId),
-    reset: () => ipcRenderer.invoke(IpcChannel.Memory_Reset)
+    get: (id: string) => ipcRenderer.invoke(IpcChannel.Memory_Get, id),
+    reset: () => ipcRenderer.invoke(IpcChannel.Memory_Reset),
+    updateConfig: (config: MemoryConfig) => ipcRenderer.invoke(IpcChannel.Memory_UpdateConfig, config)
   },
   window: {
     setMinimumSize: (width: number, height: number) =>

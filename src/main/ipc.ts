@@ -264,14 +264,11 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.KnowledgeBase_Rerank, KnowledgeService.rerank)
 
   // memory
-  // Initialize memory service
-  memoryService.init().catch(console.error)
-
   ipcMain.handle(IpcChannel.Memory_Add, async (_, messages, config) => {
     return await memoryService.add(messages, config)
   })
   ipcMain.handle(IpcChannel.Memory_Search, async (_, query, config) => {
-    return await memoryService.vectorSearch(query, config)
+    return await memoryService.search(query, config)
   })
   ipcMain.handle(IpcChannel.Memory_List, async (_, config) => {
     return await memoryService.list(config)
@@ -282,11 +279,14 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.Memory_Update, async (_, id, memory, metadata) => {
     return await memoryService.update(id, memory, metadata)
   })
-  ipcMain.handle(IpcChannel.Memory_GetHistory, async (_, memoryId) => {
-    return await memoryService.getHistory(memoryId)
+  ipcMain.handle(IpcChannel.Memory_Get, async (_, memoryId) => {
+    return await memoryService.get(memoryId)
   })
   ipcMain.handle(IpcChannel.Memory_Reset, async () => {
     return await memoryService.reset()
+  })
+  ipcMain.handle(IpcChannel.Memory_UpdateConfig, async (_, config) => {
+    return await memoryService.updateConfig(config)
   })
 
   // window

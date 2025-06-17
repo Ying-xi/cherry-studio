@@ -1,5 +1,15 @@
-import { AssistantMessage } from '@renderer/types'
-import { AddMemoryOptions, GetAllMemoryOptions, SearchMemoryOptions, SearchResult } from '@renderer/types/memory'
+import store from '@renderer/store'
+import { selectMemoryConfig } from '@renderer/store/memory'
+import {
+  AddMemoryOptions,
+  AssistantMessage,
+  MemoryHistoryItem,
+  MemoryListOptions,
+  MemorySearchOptions,
+  MemorySearchResult
+} from '@types'
+
+import { getProviderByModel } from './AssistantService'
 
 /**
  * Service for managing memory operations including storing, searching, and retrieving memories
@@ -7,6 +17,17 @@ import { AddMemoryOptions, GetAllMemoryOptions, SearchMemoryOptions, SearchResul
  */
 class MemoryService {
   private static instance: MemoryService | null = null
+
+  constructor() {
+    this.init()
+  }
+
+  /**
+   * Initializes the memory service by updating configuration in main process
+   */
+  private async init(): Promise<void> {
+    await this.updateConfig()
+  }
 
   public static getInstance(): MemoryService {
     if (!MemoryService.instance) {
@@ -24,7 +45,7 @@ class MemoryService {
    * @param config - Optional configuration for filtering memories
    * @returns Promise resolving to search results containing all memories
    */
-  public async list(config?: GetAllMemoryOptions): Promise<SearchResult> {
+  public async list(config?: MemoryListOptions): Promise<MemorySearchResult> {
     return window.api.memory.list(config)
   }
 
@@ -34,8 +55,8 @@ class MemoryService {
    * @param config - Configuration options for adding memory
    * @returns Promise resolving to search results of added memories
    */
-  public async add(messages: string | AssistantMessage[], config: AddMemoryOptions): Promise<SearchResult> {
-    return window.api.memory.add(messages, config)
+  public async add(messages: string | AssistantMessage[], options: AddMemoryOptions): Promise<MemorySearchResult> {
+    return window.api.memory.add(messages, options)
   }
 
   /**
@@ -44,8 +65,8 @@ class MemoryService {
    * @param config - Configuration options for memory search
    * @returns Promise resolving to search results matching the query
    */
-  public async search(query: string, config: SearchMemoryOptions): Promise<SearchResult> {
-    return window.api.memory.search(query, config)
+  public async search(query: string, options: MemorySearchOptions): Promise<MemorySearchResult> {
+    return window.api.memory.search(query, options)
   }
 
   /**
@@ -70,11 +91,11 @@ class MemoryService {
 
   /**
    * Gets the history of changes for a specific memory
-   * @param memoryId - Unique identifier of the memory
+   * @param id - Unique identifier of the memory
    * @returns Promise resolving to array of history items
    */
-  public async getHistory(memoryId: string): Promise<any[]> {
-    return window.api.memory.getHistory(memoryId)
+  public async get(id: string): Promise<MemoryHistoryItem[]> {
+    return window.api.memory.get(id)
   }
 
   /**
@@ -83,6 +104,25 @@ class MemoryService {
    */
   public async reset(): Promise<void> {
     return window.api.memory.reset()
+  }
+
+  /**
+   * Updates the memory service configuration in the main process
+   * Automatically gets current memory config and provider information from Redux store
+   * @returns Promise that resolves when configuration is updated
+   */
+  public async updateConfig(): Promise<void> {
+    const memoryConfig = selectMemoryConfig(store.getState())
+    const embedderProvider = memoryConfig.embedderModel ? getProviderByModel(memoryConfig.embedderModel) : undefined
+    const llmProvider = memoryConfig.llmModel ? getProviderByModel(memoryConfig.llmModel) : undefined
+
+    const configWithProviders = {
+      ...memoryConfig,
+      embedderProvider,
+      llmProvider
+    }
+
+    return window.api.memory.updateConfig(configWithProviders)
   }
 }
 
