@@ -183,7 +183,7 @@
       "input.new.context": "コンテキストをクリア {{Command}}",
       "input.new_topic": "新しいトピック {{Command}}",
       "input.pause": "一時停止",
-      "input.placeholder": "ここにメッセージを入力...",
+      "input.placeholder": "ここにメッセージを入力し、{{key}} を押して送信...",
       "input.send": "送信",
       "input.settings": "設定",
       "input.topics": " トピック ",
@@ -964,6 +964,17 @@
       "required_field": "必須項目",
       "uploaded_input": "アップロード済みの入力"
     },
+    "price": {
+      "cost": "コスト",
+      "currency": "通貨",
+      "custom": "カスタム",
+      "custom_currency": "カスタム通貨",
+      "custom_currency_placeholder": "カスタム通貨を入力してください",
+      "input": "入力価格",
+      "million_tokens": "百万トークン",
+      "output": "出力価格",
+      "price": "価格"
+    },
     "prompts": {
       "explanation": "この概念を説明してください",
       "summarize": "このテキストを要約してください",
@@ -1020,7 +1031,8 @@
       "tokenflux": "TokenFlux",
       "302ai": "302.AI",
       "cephalon": "Cephalon",
-      "lanyun": "LANYUN"
+      "lanyun": "LANYUN",
+      "vertexai": "Vertex AI"
     },
     "restore": {
       "confirm": "データを復元しますか？",
@@ -1101,7 +1113,8 @@
           "obsidian": "Obsidianにエクスポート",
           "siyuan": "思源ノートにエクスポート",
           "joplin": "Joplinにエクスポート",
-          "docx": "Wordとしてエクスポート"
+          "docx": "Wordとしてエクスポート",
+          "plain_text": "プレーンテキストとしてコピー"
         },
         "joplin": {
           "check": {
@@ -1669,6 +1682,27 @@
         },
         "openai": {
           "alert": "OpenAIプロバイダーは旧式の呼び出し方法をサポートしなくなりました。サードパーティのAPIを使用している場合は、新しいサービスプロバイダーを作成してください。"
+        },
+        "vertex_ai": {
+          "project_id": "プロジェクトID",
+          "project_id_placeholder": "your-google-cloud-project-id",
+          "project_id_help": "Google CloudプロジェクトID",
+          "location": "場所",
+          "location_help": "Vertex AIサービスの場所、例：us-central1",
+          "service_account": {
+            "title": "サービスアカウント設定",
+            "private_key": "秘密鍵",
+            "private_key_placeholder": "サービスアカウントの秘密鍵を入力してください",
+            "private_key_help": "Google Cloud ConsoleからダウンロードしたJSONキーファイルのprivate_keyフィールド",
+            "client_email": "クライアントメール",
+            "client_email_placeholder": "サービスアカウントのクライアントメールを入力してください",
+            "client_email_help": "Google Cloud ConsoleからダウンロードしたJSONキーファイルのclient_emailフィールド",
+            "description": "ADCが利用できない環境での認証に適しています",
+            "auth_success": "サービスアカウントの認証が成功しました",
+            "incomplete_config": "まずサービスアカウントの設定を完了してください"
+          },
+          "documentation": "詳細な設定については、公式ドキュメントを参照してください:",
+          "learn_more": "詳細を確認"
         }
       },
       "proxy": {
@@ -1861,7 +1895,8 @@
         "model_desc": "翻訳サービスで使用されるモデル",
         "bidirectional": "双方向翻訳設定",
         "bidirectional_tip": "有効にすると、ソース言語と目標言語間の双方向翻訳のみがサポートされます",
-        "scroll_sync": "スクロール同期設定"
+        "scroll_sync": "スクロール同期設定",
+        "preview": "Markdown プレビュー"
       },
       "title": "翻訳",
       "tooltip.newline": "改行",
