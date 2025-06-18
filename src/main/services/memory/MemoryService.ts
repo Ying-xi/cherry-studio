@@ -45,11 +45,6 @@ export class MemoryService {
   private embeddings: Embeddings | null = null
   private config: MemoryConfig | null = null
 
-  // Embedding cache management
-  private embeddingCache = new Map<string, { embedding: number[]; timestamp: number }>()
-  private readonly CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
-  private readonly MAX_CACHE_SIZE = 10000
-
   private constructor() {
     // Private constructor to enforce singleton pattern
   }
@@ -595,14 +590,6 @@ export class MemoryService {
       throw new Error('Embedder model not configured')
     }
 
-    // Check cache first
-    const cacheKey = this.getCacheKey(text, this.config.embedderModel.id)
-    const cached = this.embeddingCache.get(cacheKey)
-
-    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-      return cached.embedding
-    }
-
     try {
       // Initialize embeddings instance if needed
       if (!this.embeddings) {
@@ -620,138 +607,18 @@ export class MemoryService {
           apiKey: provider.apiKey || '',
           baseURL: provider.apiHost || '',
           apiVersion: provider.apiVersion,
-          dimensions: this.config.embedderDimensions || this.getModelDimensions(model.id)
+          dimensions: this.config.embedderDimensions
         })
         await this.embeddings.init()
       }
 
       const embedding = await this.embeddings.embedQuery(text)
 
-      // Cache the result
-      this.setCacheEntry(cacheKey, embedding)
-
       return embedding
     } catch (error) {
       logger.error('Embedding generation failed:', error)
       throw new Error(`Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
-  }
-
-  /**
-   * Generate embeddings for multiple texts
-   */
-  private async generateEmbeddings(texts: string[]): Promise<number[][]> {
-    if (!this.config?.embedderModel) {
-      throw new Error('Embedder model not configured')
-    }
-
-    const embeddings: number[][] = []
-    const uncachedTexts: string[] = []
-    const uncachedIndexes: number[] = []
-
-    // Check cache for existing embeddings
-    for (let i = 0; i < texts.length; i++) {
-      const text = texts[i]
-      const cacheKey = this.getCacheKey(text, this.config.embedderModel.id)
-      const cached = this.embeddingCache.get(cacheKey)
-
-      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-        embeddings[i] = cached.embedding
-      } else {
-        uncachedTexts.push(text)
-        uncachedIndexes.push(i)
-      }
-    }
-
-    // Generate embeddings for uncached texts
-    if (uncachedTexts.length > 0) {
-      try {
-        if (!this.embeddings) {
-          const model = this.config.embedderModel
-          const provider = this.config.embedderProvider
-
-          if (!provider) {
-            throw new Error('Embedder provider not configured')
-          }
-
-          this.embeddings = new Embeddings({
-            id: model.id,
-            model: model.id,
-            provider: provider.id,
-            apiKey: provider.apiKey || '',
-            baseURL: provider.apiHost || '',
-            apiVersion: provider.apiVersion,
-            dimensions: this.config.embedderDimensions || this.getModelDimensions(model.id)
-          })
-          await this.embeddings.init()
-        }
-
-        const newEmbeddings = await this.embeddings.embedDocuments(uncachedTexts)
-
-        // Cache and assign results
-        for (let i = 0; i < uncachedTexts.length; i++) {
-          const text = uncachedTexts[i]
-          const embedding = newEmbeddings[i]
-          const originalIndex = uncachedIndexes[i]
-
-          const cacheKey = this.getCacheKey(text, this.config.embedderModel.id)
-          this.setCacheEntry(cacheKey, embedding)
-
-          embeddings[originalIndex] = embedding
-        }
-      } catch (error) {
-        logger.error('Batch embedding generation failed:', error)
-        throw new Error(`Failed to generate embeddings: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      }
-    }
-
-    return embeddings
-  }
-
-  /**
-   * Generate cache key for text and model
-   */
-  private getCacheKey(text: string, modelId: string): string {
-    const combined = `${text}:${modelId}`
-    let hash = 0
-    for (let i = 0; i < combined.length; i++) {
-      const char = combined.charCodeAt(i)
-      hash = (hash << 5) - hash + char
-      hash = hash & hash
-    }
-    return `emb_${hash.toString(36)}`
-  }
-
-  /**
-   * Set cache entry with size management
-   */
-  private setCacheEntry(key: string, embedding: number[]): void {
-    if (this.embeddingCache.size >= this.MAX_CACHE_SIZE) {
-      const oldestKey = this.embeddingCache.keys().next().value
-      if (oldestKey) {
-        this.embeddingCache.delete(oldestKey)
-      }
-    }
-
-    this.embeddingCache.set(key, {
-      embedding,
-      timestamp: Date.now()
-    })
-  }
-
-  /**
-   * Get model dimensions
-   */
-  private getModelDimensions(modelId: string): number {
-    const dimensionMap: { [key: string]: number } = {
-      'text-embedding-3-small': 1536,
-      'text-embedding-3-large': 3072,
-      'text-embedding-ada-002': 1536,
-      'nomic-embed-text': 768,
-      'mxbai-embed-large': 1024
-    }
-
-    return dimensionMap[modelId] || 1536
   }
 
   // ========== VECTOR SEARCH OPERATIONS (Previously VectorSearch) ==========
@@ -761,86 +628,6 @@ export class MemoryService {
    */
   private embeddingToVector(embedding: number[]): string {
     return `[${embedding.join(',')}]`
-  }
-
-  /**
-   * Convert libsql vector to embedding array
-   */
-  private vectorToEmbedding(vector: string): number[] {
-    return JSON.parse(vector)
-  }
-
-  /**
-   * Search memories by vector similarity
-   */
-  private async vectorSearch(embedding: number[], options: VectorSearchOptions = {}): Promise<SearchResult> {
-    if (!this.db) throw new Error('Database not initialized')
-
-    const { limit = 10, threshold = 0.0, userId, agentId } = options
-
-    try {
-      const queryVector = this.embeddingToVector(embedding)
-
-      const conditions: string[] = ['m.is_deleted = 0', 'm.embedding IS NOT NULL']
-      const params: any[] = [queryVector]
-
-      if (userId) {
-        conditions.push('m.user_id = ?')
-        params.push(userId)
-      }
-
-      if (agentId) {
-        conditions.push('m.agent_id = ?')
-        params.push(agentId)
-      }
-
-      const whereClause = conditions.join(' AND ')
-
-      const query = `
-        SELECT 
-          m.id,
-          m.memory,
-          m.hash,
-          m.metadata,
-          m.user_id,
-          m.agent_id,
-          m.run_id,
-          m.created_at,
-          m.updated_at,
-          vector_distance_cos(m.embedding, vector32(?)) as distance,
-          (1 - vector_distance_cos(m.embedding, vector32(?))) as similarity
-        FROM memories m
-        WHERE ${whereClause}
-        AND (1 - vector_distance_cos(m.embedding, vector32(?))) >= ?
-        ORDER BY similarity DESC
-        LIMIT ?
-      `
-
-      params.push(queryVector, queryVector, threshold, limit)
-
-      const result = await this.db.execute({
-        sql: query,
-        args: params
-      })
-
-      const memories: MemoryItem[] = result.rows.map((row: any) => ({
-        id: row.id as string,
-        memory: row.memory as string,
-        hash: (row.hash as string) || undefined,
-        metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
-        createdAt: row.created_at as string,
-        updatedAt: row.updated_at as string,
-        score: row.similarity as number
-      }))
-
-      return {
-        memories,
-        count: memories.length
-      }
-    } catch (error) {
-      logger.error('Vector search failed:', error)
-      throw new Error(`Vector search failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
   }
 
   /**
@@ -948,66 +735,6 @@ export class MemoryService {
     }
   }
 
-  /**
-   * Find similar memories for deduplication
-   */
-  private async findSimilarMemories(
-    embedding: number[],
-    threshold: number = 0.95,
-    excludeId?: string
-  ): Promise<MemoryItem[]> {
-    if (!this.db) throw new Error('Database not initialized')
-
-    try {
-      const queryVector = this.embeddingToVector(embedding)
-
-      let query = `
-        SELECT 
-          m.id,
-          m.memory,
-          m.hash,
-          m.metadata,
-          m.user_id,
-          m.agent_id,
-          m.run_id,
-          m.created_at,
-          m.updated_at,
-          (1 - vector_distance_cos(m.embedding, vector32(?))) as similarity
-        FROM memories m
-        WHERE m.is_deleted = 0
-        AND m.embedding IS NOT NULL
-        AND (1 - vector_distance_cos(m.embedding, vector32(?))) >= ?
-      `
-
-      const params: any[] = [queryVector, queryVector, threshold]
-
-      if (excludeId) {
-        query += ' AND m.id != ?'
-        params.push(excludeId)
-      }
-
-      query += ' ORDER BY similarity DESC LIMIT 50'
-
-      const result = await this.db.execute({
-        sql: query,
-        args: params
-      })
-
-      return result.rows.map((row: any) => ({
-        id: row.id as string,
-        memory: row.memory as string,
-        hash: (row.hash as string) || undefined,
-        metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
-        createdAt: row.created_at as string,
-        updatedAt: row.updated_at as string,
-        score: row.similarity as number
-      }))
-    } catch (error) {
-      logger.error('Similar memories search failed:', error)
-      throw new Error(`Similar memories search failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
   // ========== HELPER METHODS ==========
 
   /**
@@ -1029,41 +756,6 @@ export class MemoryService {
       `,
       args: [memoryId, previousValue, newValue, action, now, now]
     })
-  }
-
-  /**
-   * Clear expired cache entries
-   */
-  public clearExpiredCache(): void {
-    const now = Date.now()
-    const expiredKeys: string[] = []
-
-    for (const [key, value] of this.embeddingCache.entries()) {
-      if (now - value.timestamp > this.CACHE_TTL) {
-        expiredKeys.push(key)
-      }
-    }
-
-    for (const key of expiredKeys) {
-      this.embeddingCache.delete(key)
-    }
-  }
-
-  /**
-   * Get cache statistics
-   */
-  public getCacheStats(): { size: number; maxSize: number } {
-    return {
-      size: this.embeddingCache.size,
-      maxSize: this.MAX_CACHE_SIZE
-    }
-  }
-
-  /**
-   * Clear all cached embeddings
-   */
-  public clearCache(): void {
-    this.embeddingCache.clear()
   }
 }
 
