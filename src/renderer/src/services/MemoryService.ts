@@ -32,6 +32,9 @@ class MemoryService {
   public static getInstance(): MemoryService {
     if (!MemoryService.instance) {
       MemoryService.instance = new MemoryService()
+      MemoryService.instance.updateConfig().catch((error) => {
+        console.error('Failed to initialize MemoryService:', error)
+      })
     }
     return MemoryService.instance
   }

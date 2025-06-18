@@ -43,12 +43,12 @@ import AiProvider from '../aiCore'
 import {
   getAssistantProvider,
   getAssistantSettings,
+  getDefaultAssistant,
   getDefaultModel,
   getProviderByModel,
   getTopNamingModel,
   getTranslateModel
 } from './AssistantService'
-import { getDefaultAssistant } from './AssistantService'
 import { processKnowledgeSearch } from './KnowledgeService'
 import { MemoryProcessor, memoryProcessor } from './MemoryProcessor'
 import {
@@ -361,7 +361,7 @@ export async function fetchChatCompletion({
           5 // Limit to top 5 most relevant memories
         )
 
-        if (relevantMemories.length > 0) {
+        if (relevantMemories?.length > 0) {
           console.log('Found relevant memories:', relevantMemories)
 
           // Format memories for context injection

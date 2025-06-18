@@ -7,7 +7,7 @@ import {
   SettingOutlined
 } from '@ant-design/icons'
 import MemoryService from '@renderer/services/MemoryService'
-import { MemoryItem } from '@renderer/types/memory'
+import { MemoryItem } from '@types'
 import {
   Button,
   Col,
@@ -222,8 +222,9 @@ const MemoriesPage = () => {
     })
   }
 
-  const handleSettingsSubmit = () => {
+  const handleSettingsSubmit = async () => {
     setSettingsModalVisible(false)
+    await memoryService.updateConfig()
   }
 
   const handleSettingsCancel = () => {
@@ -406,7 +407,7 @@ const MemoriesPage = () => {
         {/* Settings Modal */}
         <MemoriesSettingsModal
           visible={settingsModalVisible}
-          onSubmit={handleSettingsSubmit}
+          onSubmit={async () => await handleSettingsSubmit()}
           onCancel={handleSettingsCancel}
           form={form}
         />
