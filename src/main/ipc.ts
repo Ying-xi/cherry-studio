@@ -287,8 +287,8 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.Memory_Reset, async () => {
     return await memoryService.reset()
   })
-  ipcMain.handle(IpcChannel.Memory_UpdateConfig, async (_, config) => {
-    return await memoryService.updateConfig(config)
+  ipcMain.handle(IpcChannel.Memory_SetConfig, async (_, config) => {
+    memoryService.setConfig(config)
   })
 
   // window

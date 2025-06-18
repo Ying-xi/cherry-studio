@@ -140,7 +140,7 @@ const api = {
       ipcRenderer.invoke(IpcChannel.Memory_Update, id, memory, metadata),
     get: (id: string) => ipcRenderer.invoke(IpcChannel.Memory_Get, id),
     reset: () => ipcRenderer.invoke(IpcChannel.Memory_Reset),
-    updateConfig: (config: MemoryConfig) => ipcRenderer.invoke(IpcChannel.Memory_UpdateConfig, config)
+    setConfig: (config: MemoryConfig) => ipcRenderer.invoke(IpcChannel.Memory_SetConfig, config)
   },
   window: {
     setMinimumSize: (width: number, height: number) =>

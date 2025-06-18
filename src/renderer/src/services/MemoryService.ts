@@ -122,7 +122,7 @@ class MemoryService {
       llmProvider
     }
 
-    return window.api.memory.updateConfig(configWithProviders)
+    return window.api.memory.setConfig(configWithProviders)
   }
 }
 

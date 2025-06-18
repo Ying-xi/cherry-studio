@@ -210,7 +210,7 @@ export enum IpcChannel {
   Memory_List = 'memory:list',
   Memory_Delete = 'memory:delete',
   Memory_Update = 'memory:update',
-  Memory_Get = 'memory:get-history',
+  Memory_Get = 'memory:get',
   Memory_Reset = 'memory:reset',
-  Memory_UpdateConfig = 'memory:update-config'
+  Memory_SetConfig = 'memory:set-config'
 }
