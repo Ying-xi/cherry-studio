@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Standard Workflow
+
+1. First think through the problem, read the codebase for relevant files, and write a plan to .claude/plan.md
+2. The plan should have a list of todo items that you can check off as you complete them
+3. Before you begin working, check in with me and I will verify the plan
+4. Then, begin working on the todo items, marking them as complete as you go
+5. Please every step of the way just give me a high level explanation of what changes you made
+6. Make every task and code change you do as simple as possible. We want to avoid making any massive or complex changes. Every change should impact as little code as possible. Everything is about simplicity
+7. Finally, add a review section to the .claude/plan.md file with a summary of the changes you made and any other relevant information
+
+## IMPORTANT
+
+- For tasks that require multiple steps, always break them down into clear, manageable sub-tasks. Create a detailed plan and to-do list, and consistently use a Markdown file to document and track progress for each step.
+- You operate in an environment where `ast-grep` is available. For any search involving code structure or syntax, always default to `ast-grep --lang '<language>' -p '<pattern>'`. Only use text-based tools like `rg` or `grep` if explicitly instructed to perform a plain-text search.
+- When interpreting instructions, prioritize clarity, step-by-step reasoning, and explicit documentation of your process. Avoid making assumptions; ask for clarification if requirements are ambiguous.
+
 ## Essential Commands
 
 ### Development

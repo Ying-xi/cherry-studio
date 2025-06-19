@@ -423,8 +423,19 @@ async function processConversationMemory(messages: Message[], assistant: Assista
   try {
     const memoryConfig = selectMemoryConfig(store.getState())
 
-    if (!memoryConfig.embedderModel || !memoryConfig.llmModel) {
-      console.warn('Memory processing skipped: embedding or LLM model not configured')
+    // Use assistant's model as fallback for memory processing if not configured
+    const llmModel = memoryConfig.llmModel || assistant.model || getDefaultModel()
+    const embedderModel = memoryConfig.embedderModel || getFirstEmbeddingModel()
+
+    if (!embedderModel) {
+      console.warn(
+        'Memory processing skipped: no embedding model available. Please configure an embedding model in memory settings.'
+      )
+      return
+    }
+
+    if (!llmModel) {
+      console.warn('Memory processing skipped: LLM model not available')
       return
     }
 
@@ -437,21 +448,35 @@ async function processConversationMemory(messages: Message[], assistant: Assista
       }))
       .filter((msg) => msg.content.trim().length > 0)
 
-    if (conversationMessages.length < 2) {
-      // Need at least a user message and assistant response
-      return
-    }
+    // if (conversationMessages.length < 2) {
+    // Need at least a user message and assistant response
+    // return
+    // }
 
     const currentUserId = selectCurrentUserId(store.getState())
-    const processorConfig = MemoryProcessor.getProcessorConfig(memoryConfig, assistant.id, currentUserId)
+
+    // Create updated memory config with resolved models
+    const updatedMemoryConfig = {
+      ...memoryConfig,
+      llmModel,
+      embedderModel
+    }
+
+    const processorConfig = MemoryProcessor.getProcessorConfig(updatedMemoryConfig, assistant.id, currentUserId)
+
+    console.log('Starting memory processing for conversation with', conversationMessages.length, 'messages')
+    console.log('Using LLM model:', llmModel?.name, 'Embedding model:', embedderModel?.name)
 
     // Process the conversation in the background (don't await to avoid blocking UI)
     memoryProcessor
       .processConversation(conversationMessages, processorConfig)
       .then((result) => {
+        console.log('Memory processing completed:', result)
         if (result.facts.length > 0) {
           console.log('Extracted facts from conversation:', result.facts)
           console.log('Memory operations performed:', result.operations)
+        } else {
+          console.log('No facts extracted from conversation')
         }
       })
       .catch((error) => {
@@ -618,6 +643,22 @@ function hasApiKey(provider: Provider) {
   if (!provider) return false
   if (provider.id === 'ollama' || provider.id === 'lmstudio' || provider.type === 'vertexai') return true
   return !isEmpty(provider.apiKey)
+}
+
+/**
+ * Get the first available embedding model from enabled providers
+ */
+function getFirstEmbeddingModel() {
+  const providers = store.getState().llm.providers.filter((p) => p.enabled)
+
+  for (const provider of providers) {
+    const embeddingModel = provider.models.find((model) => isEmbeddingModel(model))
+    if (embeddingModel) {
+      return embeddingModel
+    }
+  }
+
+  return undefined
 }
 
 export async function fetchModels(provider: Provider): Promise<SdkModel[]> {
