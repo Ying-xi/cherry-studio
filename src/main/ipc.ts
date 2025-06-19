@@ -284,14 +284,14 @@ export function registerIpc(mainWindow: BrowserWindow, app: Electron.App) {
   ipcMain.handle(IpcChannel.Memory_Get, async (_, memoryId) => {
     return await memoryService.get(memoryId)
   })
-  ipcMain.handle(IpcChannel.Memory_Reset, async (_, userId) => {
-    return await memoryService.reset(userId)
-  })
   ipcMain.handle(IpcChannel.Memory_SetConfig, async (_, config) => {
     memoryService.setConfig(config)
   })
   ipcMain.handle(IpcChannel.Memory_DeleteUser, async (_, userId) => {
     return await memoryService.deleteUser(userId)
+  })
+  ipcMain.handle(IpcChannel.Memory_GetUsersList, async () => {
+    return await memoryService.getUsersList()
   })
 
   // window

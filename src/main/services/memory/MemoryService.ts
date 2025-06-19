@@ -485,52 +485,6 @@ export class MemoryService {
   }
 
   /**
-   * Reset all memories or memories for a specific user
-   */
-  public async reset(userId?: string): Promise<void> {
-    await this.init()
-    if (!this.db) throw new Error('Database not initialized')
-
-    try {
-      if (userId) {
-        // Reset memories for specific user
-        const countResult = await this.db.execute({
-          sql: `SELECT COUNT(*) as total FROM memories WHERE user_id = ?`,
-          args: [userId]
-        })
-        const totalCount = (countResult.rows[0] as any).total as number
-
-        if (totalCount === 0) {
-          logger.info(`No memories found for user: ${userId}`)
-          return
-        }
-
-        // Delete history entries for this user's memories
-        await this.db.execute({
-          sql: `DELETE FROM memory_history WHERE memory_id IN (SELECT id FROM memories WHERE user_id = ?)`,
-          args: [userId]
-        })
-
-        // Delete all memories for this user (hard delete)
-        await this.db.execute({
-          sql: `DELETE FROM memories WHERE user_id = ?`,
-          args: [userId]
-        })
-
-        logger.info(`Reset ${totalCount} memories for user: ${userId}`)
-      } else {
-        // Reset all memories
-        await this.db.execute(MemoryQueries.history.reset)
-        await this.db.execute(MemoryQueries.memory.reset)
-        logger.info('All memories reset')
-      }
-    } catch (error) {
-      logger.error('Reset failed:', error)
-      throw new Error(`Failed to reset memories: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  /**
    * Delete a user and all their memories (hard delete)
    */
   public async deleteUser(userId: string): Promise<void> {
@@ -569,6 +523,30 @@ export class MemoryService {
     } catch (error) {
       logger.error('Delete user failed:', error)
       throw new Error(`Failed to delete user: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Get list of unique user IDs with their memory counts
+   */
+  public async getUsersList(): Promise<{ userId: string; memoryCount: number; lastMemoryDate: string }[]> {
+    await this.init()
+    if (!this.db) throw new Error('Database not initialized')
+
+    try {
+      const result = await this.db.execute({
+        sql: MemoryQueries.users.getUniqueUsers,
+        args: []
+      })
+
+      return result.rows.map((row: any) => ({
+        userId: row.user_id as string,
+        memoryCount: row.memory_count as number,
+        lastMemoryDate: row.last_memory_date as string
+      }))
+    } catch (error) {
+      logger.error('Get users list failed:', error)
+      throw new Error(`Failed to get users list: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

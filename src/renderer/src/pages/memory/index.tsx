@@ -465,7 +465,18 @@ const MemoriesPage = () => {
     return user === 'default-user' ? user.slice(0, 1).toUpperCase() : user.slice(0, 2).toUpperCase()
   }
 
-  // Load memories function - now independent of currentUser in dependencies
+  // Load unique users from database
+  const loadUniqueUsers = useCallback(async () => {
+    try {
+      const usersList = await memoryService.getUsersList()
+      const users = usersList.map((user) => user.userId)
+      setUniqueUsers(users)
+    } catch (error) {
+      console.error('Failed to load users list:', error)
+    }
+  }, [memoryService])
+
+  // Load memories function
   const loadMemories = useCallback(
     async (userId?: string) => {
       const targetUser = userId || currentUser
@@ -475,17 +486,8 @@ const MemoriesPage = () => {
         // First, ensure the memory service is using the correct user
         memoryService.setCurrentUser(targetUser)
 
-        // Get all memories to extract unique users (not filtered by current user)
-        const allResult = await window.api.memory.list({ limit: 1000 })
-
-        // Extract unique user IDs from all memories
-        const users = new Set<string>()
-        allResult.memories?.forEach((memory) => {
-          if (memory.metadata?.userId) {
-            users.add(memory.metadata.userId)
-          }
-        })
-        setUniqueUsers(Array.from(users))
+        // Load unique users efficiently from database
+        await loadUniqueUsers()
 
         // Get memories for current user context
         const result = await memoryService.list({ limit: 1000 })
@@ -498,7 +500,7 @@ const MemoriesPage = () => {
         setLoading(false)
       }
     },
-    [memoryService, t]
+    [currentUser, memoryService, t, loadUniqueUsers]
   )
 
   // Sync memoryService with Redux store on mount and when currentUser changes
@@ -511,7 +513,7 @@ const MemoriesPage = () => {
   useEffect(() => {
     console.log('Initial load on mount')
     loadMemories()
-  }, [])
+  }, [loadMemories])
 
   // Filter memories based on search criteria (no user filter needed - already filtered by service)
   const filteredMemories = memories.filter((memory) => {
@@ -590,6 +592,15 @@ const MemoriesPage = () => {
 
   const handleAddUser = async (userId: string) => {
     try {
+      // Create the user by adding an initial memory with the userId
+      // This implicitly creates the user in the system
+      await memoryService.setCurrentUser(userId)
+      await memoryService.add(t('memory.initial_memory_content'), { userId })
+
+      // Refresh the users list from the database to persist the new user
+      await loadUniqueUsers()
+
+      // Switch to the newly created user
       await handleUserSwitch(userId)
       message.success(t('memory.user_created', { user: userId }))
       setAddUserModalVisible(false)
@@ -627,6 +638,9 @@ const MemoriesPage = () => {
           await memoryService.deleteUser(userId)
           message.success(t('memory.user_deleted', { user: userId }))
 
+          // Refresh the users list from database after deletion
+          await loadUniqueUsers()
+
           // Switch to default user if current user was deleted
           if (currentUser === userId) {
             await handleUserSwitch('default-user')
@@ -636,27 +650,6 @@ const MemoriesPage = () => {
         } catch (error) {
           console.error('Failed to delete user:', error)
           message.error(t('memory.delete_user_failed'))
-        }
-      }
-    })
-  }
-
-  const handleResetUserMemories = async (userId: string) => {
-    Modal.confirm({
-      title: t('memory.reset_user_memories_confirm_title'),
-      content: t('memory.reset_user_memories_confirm_content', { user: getUserDisplayName(userId) }),
-      icon: <ExclamationCircleOutlined />,
-      okText: t('common.yes'),
-      cancelText: t('common.no'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          await memoryService.reset(userId)
-          message.success(t('memory.user_memories_reset', { user: getUserDisplayName(userId) }))
-          await loadMemories()
-        } catch (error) {
-          console.error('Failed to reset user memories:', error)
-          message.error(t('memory.reset_user_memories_failed'))
         }
       }
     })
@@ -817,12 +810,6 @@ const MemoriesPage = () => {
                     label: t('common.refresh'),
                     icon: <ReloadOutlined />,
                     onClick: () => loadMemories()
-                  },
-                  {
-                    key: 'resetMemories',
-                    label: t('memory.reset_user_memories'),
-                    icon: <ReloadOutlined />,
-                    onClick: () => handleResetUserMemories(currentUser)
                   },
                   ...(currentUser !== 'default-user'
                     ? [

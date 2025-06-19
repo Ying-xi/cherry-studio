@@ -83,9 +83,7 @@ export const MemoryQueries = {
         m.updated_at
       FROM memories m
       WHERE
-    `,
-
-    reset: 'DELETE FROM memories'
+    `
   },
 
   // History operations
@@ -99,9 +97,7 @@ export const MemoryQueries = {
       SELECT * FROM memory_history 
       WHERE memory_id = ? AND is_deleted = 0
       ORDER BY created_at DESC
-    `,
-
-    reset: 'DELETE FROM memory_history'
+    `
   },
 
   // Search operations
@@ -144,6 +140,20 @@ export const MemoryQueries = {
           ) as combined_score
         FROM memories m
         WHERE
+    `
+  },
+
+  // User operations
+  users: {
+    getUniqueUsers: `
+      SELECT DISTINCT 
+        user_id,
+        COUNT(*) as memory_count,
+        MAX(created_at) as last_memory_date
+      FROM memories 
+      WHERE user_id IS NOT NULL AND is_deleted = 0
+      GROUP BY user_id
+      ORDER BY last_memory_date DESC
     `
   }
 } as const
