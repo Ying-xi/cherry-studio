@@ -75,7 +75,7 @@ class MemoryService {
   public async list(config?: MemoryListOptions): Promise<MemorySearchResult> {
     const configWithUser = {
       ...config,
-      userId: this.currentUserId === 'default-user' ? undefined : this.currentUserId
+      userId: this.currentUserId
     }
 
     try {
@@ -109,15 +109,8 @@ class MemoryService {
    * @returns Promise resolving to search results of added memories
    */
   public async add(messages: string | AssistantMessage[], options: AddMemoryOptions): Promise<MemorySearchResult> {
-    const optionsWithUser = {
-      ...options,
-      metadata: {
-        ...options.metadata,
-        userId: options.metadata?.userId || this.currentUserId
-      }
-    }
-    const result: SearchResult = await window.api.memory.add(messages, optionsWithUser)
-
+    options.userId = this.currentUserId
+    const result: SearchResult = await window.api.memory.add(messages, options)
     // Convert SearchResult to MemorySearchResult for consistency
     return {
       results: result.memories,
@@ -132,12 +125,8 @@ class MemoryService {
    * @returns Promise resolving to search results matching the query
    */
   public async search(query: string, options: MemorySearchOptions): Promise<MemorySearchResult> {
-    const optionsWithUser = {
-      ...options,
-      userId: this.currentUserId === 'default-user' ? undefined : this.currentUserId
-    }
-    const result: SearchResult = await window.api.memory.search(query, optionsWithUser)
-
+    options.userId = this.currentUserId
+    const result: SearchResult = await window.api.memory.search(query, options)
     // Convert SearchResult to MemorySearchResult for consistency
     return {
       results: result.memories,

@@ -3,7 +3,6 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
-  FilterOutlined,
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -13,6 +12,7 @@ import {
   UserOutlined
 } from '@ant-design/icons'
 import MemoryService from '@renderer/services/MemoryService'
+import { selectCurrentUserId, setCurrentUserId } from '@renderer/store/memory'
 import { MemoryItem } from '@types'
 import {
   Avatar,
@@ -39,6 +39,7 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useDispatch, useSelector } from 'react-redux'
 import styled from 'styled-components'
 
 import MemoriesSettingsModal from './settings-modal'
@@ -59,31 +60,92 @@ const StyledContent = styled(Content)`
 `
 
 const HeaderCard = styled(Card)`
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover) 100%);
-  border: none;
-  border-radius: 16px;
+  background: #ffffff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
   margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 
   .ant-card-body {
-    padding: 32px;
+    padding: 24px;
+  }
+
+  .header-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .header-left {
+    flex: 1;
   }
 
   .header-title {
-    color: white;
-    margin: 0;
+    color: #1f2937;
+    margin: 0 0 8px 0;
     font-weight: 600;
+    font-size: 28px;
   }
 
   .header-description {
-    color: rgba(255, 255, 255, 0.85);
-    margin: 8px 0 0 0;
+    color: #6b7280;
+    margin: 0 0 12px 0;
     font-size: 16px;
   }
 
   .header-stats {
-    color: rgba(255, 255, 255, 0.7);
-    margin-top: 16px;
+    color: #9ca3af;
     font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .user-section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .user-avatar {
+    background: #3b82f6;
+    color: white;
+  }
+
+  .user-details h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+  }
+
+  .user-details p {
+    margin: 0;
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .user-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 `
 
@@ -96,43 +158,6 @@ const FilterCard = styled(Card)`
 
   .ant-card-body {
     padding: 20px;
-  }
-`
-
-const UserSwitchCard = styled(Card)`
-  background: var(--color-background-soft);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  margin-bottom: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-
-  .ant-card-body {
-    padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  .user-avatar {
-    background: var(--color-primary);
-    color: white;
-  }
-
-  .user-info {
-    flex: 1;
-  }
-
-  .user-label {
-    color: var(--color-text-secondary);
-    font-size: 14px;
-    margin: 0;
-  }
-
-  .user-name {
-    color: var(--color-text);
-    font-size: 16px;
-    font-weight: 500;
-    margin: 0;
   }
 `
 
@@ -228,7 +253,7 @@ const LoadingContainer = styled.div`
 interface AddMemoryModalProps {
   visible: boolean
   onCancel: () => void
-  onAdd: (memory: string, userId?: string) => Promise<void>
+  onAdd: (memory: string) => Promise<void>
 }
 
 interface EditMemoryModalProps {
@@ -236,13 +261,6 @@ interface EditMemoryModalProps {
   memory: MemoryItem | null
   onCancel: () => void
   onUpdate: (id: string, memory: string, metadata?: Record<string, any>) => Promise<void>
-}
-
-interface UserSwitchComponentProps {
-  currentUser: string
-  users: string[]
-  onUserChange: (userId: string) => void
-  onAddUser: (userId: string) => void
 }
 
 interface AddUserModalProps {
@@ -257,10 +275,10 @@ const AddMemoryModal: React.FC<AddMemoryModalProps> = ({ visible, onCancel, onAd
   const [loading, setLoading] = useState(false)
   const { t } = useTranslation()
 
-  const handleSubmit = async (values: { memory: string; userId?: string }) => {
+  const handleSubmit = async (values: { memory: string }) => {
     setLoading(true)
     try {
-      await onAdd(values.memory, values.userId)
+      await onAdd(values.memory)
       form.resetFields()
       onCancel()
     } finally {
@@ -306,9 +324,6 @@ const AddMemoryModal: React.FC<AddMemoryModalProps> = ({ visible, onCancel, onAd
             placeholder={t('memory.memory_placeholder')}
             style={{ fontSize: '15px', lineHeight: '1.6' }}
           />
-        </Form.Item>
-        <Form.Item label={t('memory.user_id')} name="userId">
-          <Input placeholder={t('memory.user_id_placeholder')} size="large" prefix={<UserOutlined />} />
         </Form.Item>
       </Form>
     </Modal>
@@ -480,15 +495,25 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ visible, onCancel, onAdd, e
   )
 }
 
-const UserSwitchComponent: React.FC<UserSwitchComponentProps> = ({ currentUser, users, onUserChange, onAddUser }) => {
+const MemoriesPage = () => {
   const { t } = useTranslation()
+  const dispatch = useDispatch()
+  const currentUser = useSelector(selectCurrentUserId)
+
+  const [memories, setMemories] = useState<MemoryItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+  const [searchText, setSearchText] = useState('')
+  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
+  const [settingsModalVisible, setSettingsModalVisible] = useState(false)
+  const [addMemoryModalVisible, setAddMemoryModalVisible] = useState(false)
+  const [editingMemory, setEditingMemory] = useState<MemoryItem | null>(null)
   const [addUserModalVisible, setAddUserModalVisible] = useState(false)
+  const [form] = Form.useForm()
+  const [uniqueUsers, setUniqueUsers] = useState<string[]>([])
+  const memoryService = MemoryService.getInstance()
 
-  const handleAddUser = (userId: string) => {
-    onAddUser(userId)
-    setAddUserModalVisible(false)
-  }
-
+  // Utility functions
   const getUserDisplayName = (user: string) => {
     return user === 'default-user' ? t('memory.default_user') : user
   }
@@ -497,124 +522,55 @@ const UserSwitchComponent: React.FC<UserSwitchComponentProps> = ({ currentUser, 
     return user === 'default-user' ? user.slice(0, 1).toUpperCase() : user.slice(0, 2).toUpperCase()
   }
 
-  return (
-    <>
-      <UserSwitchCard>
-        <Avatar className="user-avatar" size={48} icon={<UserOutlined />}>
-          {getUserAvatar(currentUser)}
-        </Avatar>
-        <div className="user-info">
-          <Text className="user-label">{t('memory.current_user')}</Text>
-          <Text className="user-name">{getUserDisplayName(currentUser)}</Text>
-        </div>
-        <Space>
-          <Select
-            value={currentUser}
-            onChange={onUserChange}
-            style={{ minWidth: 200 }}
-            placeholder={t('memory.select_user')}
-            size="large"
-            dropdownRender={(menu) => (
-              <>
-                {menu}
-                <div style={{ padding: '8px 0', borderTop: '1px solid var(--color-border)' }}>
-                  <Button
-                    type="text"
-                    icon={<UserAddOutlined />}
-                    onClick={() => setAddUserModalVisible(true)}
-                    style={{ width: '100%', textAlign: 'left' }}>
-                    {t('memory.add_new_user')}
-                  </Button>
-                </div>
-              </>
-            )}>
-            <Option value="default-user">
-              <Space>
-                <Avatar size={24} className="user-avatar">
-                  {getUserAvatar('default-user')}
-                </Avatar>
-                <span>{t('memory.default_user')}</span>
-                <Tag color="blue">{t('memory.default')}</Tag>
-              </Space>
-            </Option>
-            {users.map((user) => (
-              <Option key={user} value={user}>
-                <Space>
-                  <Avatar size={24} className="user-avatar">
-                    {getUserAvatar(user)}
-                  </Avatar>
-                  <span>{user}</span>
-                  <Tag color="green">{t('memory.custom')}</Tag>
-                </Space>
-              </Option>
-            ))}
-          </Select>
-          <Button type="primary" icon={<UserAddOutlined />} onClick={() => setAddUserModalVisible(true)} size="large">
-            {t('memory.add_user')}
-          </Button>
-        </Space>
-      </UserSwitchCard>
+  // Load memories function - now independent of currentUser in dependencies
+  const loadMemories = useCallback(
+    async (userId?: string) => {
+      const targetUser = userId || currentUser
+      console.log('Loading memories for user:', targetUser)
+      setLoading(true)
+      try {
+        // First, ensure the memory service is using the correct user
+        memoryService.setCurrentUser(targetUser)
 
-      <AddUserModal
-        visible={addUserModalVisible}
-        onCancel={() => setAddUserModalVisible(false)}
-        onAdd={handleAddUser}
-        existingUsers={[...users, 'default-user']}
-      />
-    </>
+        // Get all memories to extract unique users (not filtered by current user)
+        const allResult = await window.api.memory.list({ limit: 1000 })
+
+        // Extract unique user IDs from all memories
+        const users = new Set<string>()
+        allResult.memories?.forEach((memory) => {
+          if (memory.metadata?.userId) {
+            users.add(memory.metadata.userId)
+          }
+        })
+        setUniqueUsers(Array.from(users))
+
+        // Get memories for current user context
+        const result = await memoryService.list({ limit: 1000 })
+        console.log('Loaded memories for user:', targetUser, 'count:', result.results?.length || 0)
+        setMemories(result.results || [])
+      } catch (error) {
+        console.error('Failed to load memories:', error)
+        message.error(t('memory.load_failed'))
+      } finally {
+        setLoading(false)
+      }
+    },
+    [memoryService, t]
   )
-}
 
-const MemoriesPage = () => {
-  const { t } = useTranslation()
-  const [memories, setMemories] = useState<MemoryItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
-  const [searchText, setSearchText] = useState('')
-  const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
-  const [selectedUser, setSelectedUser] = useState('all')
-  const [settingsModalVisible, setSettingsModalVisible] = useState(false)
-  const [addMemoryModalVisible, setAddMemoryModalVisible] = useState(false)
-  const [editingMemory, setEditingMemory] = useState<MemoryItem | null>(null)
-  const [form] = Form.useForm()
-  const [uniqueUsers, setUniqueUsers] = useState<string[]>([])
-  const [currentUser, setCurrentUser] = useState('default-user')
-  const memoryService = MemoryService.getInstance()
-
-  // Load memories on mount and when config changes
-  const loadMemories = useCallback(async () => {
-    setLoading(true)
-    try {
-      // Get all memories to extract unique users (not filtered by current user)
-      const allResult = await window.api.memory.list({ limit: 1000 })
-
-      // Extract unique user IDs from all memories
-      const users = new Set<string>()
-      // window.api.memory.list returns SearchResult with 'memories' property
-      allResult.memories?.forEach((memory) => {
-        if (memory.metadata?.userId) {
-          users.add(memory.metadata.userId)
-        }
-      })
-      setUniqueUsers(Array.from(users))
-
-      // Get memories for current context
-      // memoryService.list returns MemorySearchResult with 'results' property
-      const result = await memoryService.list({ limit: 1000 })
-      setMemories(result.results || [])
-    } catch (error) {
-      console.error('Failed to load memories:', error)
-      message.error(t('memory.load_failed'))
-    } finally {
-      setLoading(false)
-    }
-  }, [memoryService, t])
-
+  // Sync memoryService with Redux store on mount and when currentUser changes
   useEffect(() => {
-    loadMemories()
-  }, [loadMemories])
+    console.log('useEffect triggered for currentUser:', currentUser)
+    loadMemories(currentUser)
+  }, [currentUser, loadMemories])
 
-  // Filter memories based on search criteria
+  // Initial load on mount
+  useEffect(() => {
+    console.log('Initial load on mount')
+    loadMemories()
+  }, [])
+
+  // Filter memories based on search criteria (no user filter needed - already filtered by service)
   const filteredMemories = memories.filter((memory) => {
     // Search text filter
     if (searchText && !memory.memory.toLowerCase().includes(searchText.toLowerCase())) {
@@ -627,11 +583,6 @@ const MemoriesPage = () => {
       if (!memoryDate.isAfter(dateRange[0]) || !memoryDate.isBefore(dateRange[1])) {
         return false
       }
-    }
-
-    // User filter
-    if (selectedUser !== 'all' && memory.metadata?.userId !== selectedUser) {
-      return false
     }
 
     return true
@@ -649,20 +600,15 @@ const MemoriesPage = () => {
     }
   }
 
-  const handleUserChange = (value: string) => {
-    setSelectedUser(value)
-  }
-
   const resetFilters = () => {
     setSearchText('')
     setDateRange(null)
-    setSelectedUser('all')
   }
 
-  const handleAddMemory = async (memory: string, userId?: string) => {
+  const handleAddMemory = async (memory: string) => {
     try {
-      const metadata = userId ? { userId } : undefined
-      await memoryService.add(memory, { metadata })
+      // The memory service will automatically use the current user from its state
+      await memoryService.add(memory, {})
       message.success(t('memory.add_success'))
       await loadMemories()
     } catch (error) {
@@ -718,25 +664,34 @@ const MemoriesPage = () => {
     }
   }
 
-  const handleUserSwitch = (userId: string) => {
-    setCurrentUser(userId)
-    memoryService.setCurrentUser(userId)
-    // Filter memories based on the selected user
-    if (userId === 'default-user') {
-      setSelectedUser('all')
-    } else {
-      setSelectedUser(userId)
+  const handleUserSwitch = async (userId: string) => {
+    console.log('Switching to user:', userId)
+
+    // First update Redux state
+    dispatch(setCurrentUserId(userId))
+
+    // Clear current memories to show loading state immediately
+    setMemories([])
+    setSelectedRowKeys([])
+
+    try {
+      // Explicitly load memories for the new user
+      await loadMemories(userId)
+
+      message.success(
+        t('memory.user_switched', { user: userId === 'default-user' ? t('memory.default_user') : userId })
+      )
+    } catch (error) {
+      console.error('Failed to switch user:', error)
+      message.error(t('memory.user_switch_failed'))
     }
-    // Reload memories with new user context
-    loadMemories()
-    message.success(t('memory.user_switched', { user: userId === 'default-user' ? t('memory.default_user') : userId }))
   }
 
   const handleAddUser = async (userId: string) => {
     try {
-      // Switch to the new user immediately
-      handleUserSwitch(userId)
+      await handleUserSwitch(userId)
       message.success(t('memory.user_created', { user: userId }))
+      setAddUserModalVisible(false)
     } catch (error) {
       console.error('Failed to add user:', error)
       message.error(t('memory.add_user_failed'))
@@ -856,8 +811,8 @@ const MemoriesPage = () => {
       <StyledContent>
         {/* Header Section */}
         <HeaderCard>
-          <Row justify="space-between" align="middle">
-            <Col>
+          <div className="header-main">
+            <div className="header-left">
               <Title level={2} className="header-title">
                 {t('memory.memories')}
               </Title>
@@ -865,66 +820,109 @@ const MemoriesPage = () => {
                 {t('memory.memories_description', { count: filteredMemories.length, total: memories.length })}
               </Text>
               <div className="header-stats">
-                {uniqueUsers.length > 0 && (
-                  <span>
-                    {uniqueUsers.length} {uniqueUsers.length === 1 ? t('memory.user') : t('memory.users')} •
-                  </span>
-                )}
                 <span>
-                  {' '}
-                  {memories.length} {t('memory.total_memories')}
+                  <UserOutlined style={{ marginRight: 4 }} />
+                  {uniqueUsers.length + 1} {uniqueUsers.length === 0 ? t('memory.user') : t('memory.users')}
+                </span>
+                <span>
+                  📚 {memories.length} {t('memory.total_memories')}
                 </span>
               </div>
-            </Col>
-            <Col>
-              <Space size="middle">
+            </div>
+            <div className="header-actions">
+              <Button
+                type="primary"
+                size="large"
+                icon={<PlusOutlined />}
+                onClick={() => setAddMemoryModalVisible(true)}>
+                {t('memory.add_memory')}
+              </Button>
+              <Tooltip title={t('common.settings')}>
                 <Button
-                  type="primary"
+                  shape="circle"
                   size="large"
-                  icon={<PlusOutlined />}
-                  onClick={() => setAddMemoryModalVisible(true)}
-                  style={{ background: 'rgba(255,255,255,0.2)', border: '1px solid rgba(255,255,255,0.3)' }}>
-                  {t('memory.add_memory')}
-                </Button>
-                <Tooltip title={t('common.settings')}>
-                  <Button
-                    shape="circle"
-                    size="large"
-                    icon={<SettingOutlined />}
-                    onClick={() => setSettingsModalVisible(true)}
-                    style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: 'white'
-                    }}
-                  />
-                </Tooltip>
-                <Tooltip title={t('common.refresh')}>
-                  <Button
-                    shape="circle"
-                    size="large"
-                    icon={<ReloadOutlined />}
-                    loading={loading}
-                    onClick={loadMemories}
-                    style={{
-                      background: 'rgba(255,255,255,0.1)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: 'white'
-                    }}
-                  />
-                </Tooltip>
-              </Space>
-            </Col>
-          </Row>
-        </HeaderCard>
+                  icon={<SettingOutlined />}
+                  onClick={() => setSettingsModalVisible(true)}
+                />
+              </Tooltip>
+              <Tooltip title={t('common.refresh')}>
+                <Button
+                  shape="circle"
+                  size="large"
+                  icon={<ReloadOutlined />}
+                  loading={loading}
+                  onClick={loadMemories}
+                />
+              </Tooltip>
+            </div>
+          </div>
 
-        {/* User Switch Section */}
-        <UserSwitchComponent
-          currentUser={currentUser}
-          users={uniqueUsers}
-          onUserChange={handleUserSwitch}
-          onAddUser={handleAddUser}
-        />
+          <div className="user-section">
+            <div className="user-info">
+              <Avatar className="user-avatar" size={40}>
+                {getUserAvatar(currentUser)}
+              </Avatar>
+              <div className="user-details">
+                <h4>{getUserDisplayName(currentUser)}</h4>
+                <p>{t('memory.current_user')}</p>
+              </div>
+            </div>
+            <div className="user-controls">
+              <Select
+                value={currentUser}
+                onChange={handleUserSwitch}
+                style={{ minWidth: 180 }}
+                placeholder={t('memory.select_user')}
+                size="large"
+                dropdownRender={(menu) => (
+                  <>
+                    {menu}
+                    <div style={{ padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
+                      <Button
+                        type="text"
+                        icon={<UserAddOutlined />}
+                        onClick={() => setAddUserModalVisible(true)}
+                        style={{ width: '100%', textAlign: 'left' }}>
+                        {t('memory.add_new_user')}
+                      </Button>
+                    </div>
+                  </>
+                )}>
+                <Option value="default-user">
+                  <Space>
+                    <Avatar size={20} className="user-avatar">
+                      {getUserAvatar('default-user')}
+                    </Avatar>
+                    <span>{t('memory.default_user')}</span>
+                    <Tag color="blue" size="small">
+                      {t('memory.default')}
+                    </Tag>
+                  </Space>
+                </Option>
+                {uniqueUsers.map((user) => (
+                  <Option key={user} value={user}>
+                    <Space>
+                      <Avatar size={20} className="user-avatar">
+                        {getUserAvatar(user)}
+                      </Avatar>
+                      <span>{user}</span>
+                      <Tag color="green" size="small">
+                        {t('memory.custom')}
+                      </Tag>
+                    </Space>
+                  </Option>
+                ))}
+              </Select>
+              <Button
+                type="default"
+                icon={<UserAddOutlined />}
+                onClick={() => setAddUserModalVisible(true)}
+                size="large">
+                {t('memory.add_user')}
+              </Button>
+            </div>
+          </div>
+        </HeaderCard>
 
         {/* Filter Section */}
         <FilterCard>
@@ -949,25 +947,7 @@ const MemoriesPage = () => {
                 suffixIcon={<CalendarOutlined />}
               />
             </Col>
-            <Col xs={24} sm={12} md={6} lg={6}>
-              <Select
-                defaultValue="all"
-                style={{ width: '100%' }}
-                size="large"
-                onChange={handleUserChange}
-                value={selectedUser}
-                suffixIcon={<FilterOutlined />}>
-                <Option value="all">
-                  {t('memory.all_users')} ({uniqueUsers.length} {t('memory.users')})
-                </Option>
-                {uniqueUsers.map((user) => (
-                  <Option key={user} value={user}>
-                    {user}
-                  </Option>
-                ))}
-              </Select>
-            </Col>
-            <Col xs={24} sm={12} md={6} lg={6}>
+            <Col xs={24} sm={12} md={12} lg={12}>
               <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
                 {selectedRowKeys.length > 0 && (
                   <Button danger onClick={handleDeleteSelected}>
@@ -996,6 +976,14 @@ const MemoriesPage = () => {
           memory={editingMemory}
           onCancel={() => setEditingMemory(null)}
           onUpdate={handleUpdateMemory}
+        />
+
+        {/* Add User Modal */}
+        <AddUserModal
+          visible={addUserModalVisible}
+          onCancel={() => setAddUserModalVisible(false)}
+          onAdd={handleAddUser}
+          existingUsers={[...uniqueUsers, 'default-user']}
         />
 
         {/* Settings Modal */}

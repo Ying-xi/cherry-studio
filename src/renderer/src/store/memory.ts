@@ -9,6 +9,8 @@ import type { MemoryConfig } from '@types'
 export interface MemoryState {
   /** The current memory configuration */
   memoryConfig: MemoryConfig
+  /** The currently selected user ID for memory operations */
+  currentUserId: string
 }
 
 // Default memory configuration to avoid undefined errors
@@ -22,7 +24,8 @@ const defaultMemoryConfig: MemoryConfig = {
  * Initial state for the memory store
  */
 export const initialState: MemoryState = {
-  memoryConfig: defaultMemoryConfig
+  memoryConfig: defaultMemoryConfig,
+  currentUserId: localStorage.getItem('memory_currentUserId') || 'default-user'
 }
 
 /**
@@ -48,6 +51,15 @@ const memorySlice = createSlice({
      */
     updateMemoryConfig: (state, action: PayloadAction<MemoryConfig>) => {
       state.memoryConfig = action.payload
+    },
+    /**
+     * Sets the current user ID and persists it to localStorage
+     * @param state - Current memory state
+     * @param action - Payload containing the new user ID
+     */
+    setCurrentUserId: (state, action: PayloadAction<string>) => {
+      state.currentUserId = action.payload
+      localStorage.setItem('memory_currentUserId', action.payload)
     }
   },
   selectors: {
@@ -56,21 +68,30 @@ const memorySlice = createSlice({
      * @param state - Memory state
      * @returns The current MemoryConfig or undefined if not set
      */
-    getMemoryConfig: (state) => state.memoryConfig
+    getMemoryConfig: (state) => state.memoryConfig,
+    /**
+     * Selector to get the current user ID
+     * @param state - Memory state
+     * @returns The current user ID
+     */
+    getCurrentUserId: (state) => state.currentUserId
   }
 })
 
 // Export action creators
-export const { updateMemoryConfig } = memorySlice.actions
+export const { updateMemoryConfig, setCurrentUserId } = memorySlice.actions
 
 // Export selectors
-export const { getMemoryConfig } = memorySlice.selectors
+export const { getMemoryConfig, getCurrentUserId } = memorySlice.selectors
 
 // Type-safe selector for accessing this slice from the root state
 export const selectMemory = (state: { memory: MemoryState }) => state.memory
 
 // Root state selector for memory config with safety check
 export const selectMemoryConfig = (state: { memory?: MemoryState }) => state.memory?.memoryConfig || defaultMemoryConfig
+
+// Root state selector for current user ID with safety check
+export const selectCurrentUserId = (state: { memory?: MemoryState }) => state.memory?.currentUserId || 'default-user'
 
 export { memorySlice }
 // Export the reducer as default export

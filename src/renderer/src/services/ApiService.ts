@@ -18,7 +18,7 @@ import {
 import { getStoreSetting } from '@renderer/hooks/useSettings'
 import i18n from '@renderer/i18n'
 import store from '@renderer/store'
-import { selectMemoryConfig } from '@renderer/store/memory'
+import { selectCurrentUserId, selectMemoryConfig } from '@renderer/store/memory'
 import {
   Assistant,
   ExternalToolResult,
@@ -442,11 +442,8 @@ async function processConversationMemory(messages: Message[], assistant: Assista
       return
     }
 
-    const processorConfig = MemoryProcessor.getProcessorConfig(
-      memoryConfig,
-      assistant.id,
-      'default-user' // TODO: Get actual user ID from context
-    )
+    const currentUserId = selectCurrentUserId(store.getState())
+    const processorConfig = MemoryProcessor.getProcessorConfig(memoryConfig, assistant.id, currentUserId)
 
     // Process the conversation in the background (don't await to avoid blocking UI)
     memoryProcessor
