@@ -30,12 +30,11 @@ import {
   WebSearchSource
 } from '@renderer/types'
 import { type Chunk, ChunkType } from '@renderer/types/chunk'
-import { Message, MessageBlockStatus } from '@renderer/types/newMessage'
+import { Message } from '@renderer/types/newMessage'
 import { SdkModel } from '@renderer/types/sdk'
 import { removeSpecialCharactersForTopicName } from '@renderer/utils'
 import { isAbortError } from '@renderer/utils/error'
 import { extractInfoFromXML, ExtractResults } from '@renderer/utils/extract'
-import { createMainTextBlock } from '@renderer/utils/messageUtils/create'
 import { findFileBlocks, getKnowledgeBaseIds, getMainTextContent } from '@renderer/utils/messageUtils/find'
 import { findLast, isEmpty, takeRight } from 'lodash'
 
@@ -75,6 +74,7 @@ async function fetchExternalTool(
   // 使用外部搜索工具
   const shouldWebSearch = !!assistant.webSearchProviderId && webSearchProvider !== null
   const shouldKnowledgeSearch = hasKnowledgeBase
+  const shouldSearchMemory = assistant.enableMemory
 
   // 在工具链开始时发送进度通知
   const willUseTools = shouldWebSearch || shouldKnowledgeSearch
@@ -171,6 +171,51 @@ async function fetchExternalTool(
     }
   }
 
+  const searchMemory = async (): Promise<string[] | undefined> => {
+    if (!shouldSearchMemory) return []
+    try {
+      const memoryConfig = selectMemoryConfig(store.getState())
+      const content = getMainTextContent(lastUserMessage)
+      if (!content) {
+        console.warn('searchMemory called without valid content in lastUserMessage')
+        return []
+      }
+
+      if (memoryConfig.embedderModel && memoryConfig.llmModel) {
+        const currentUserId = selectCurrentUserId(store.getState())
+        // Search for relevant memories
+        const processorConfig = MemoryProcessor.getProcessorConfig(memoryConfig, assistant.id, currentUserId)
+        console.log('Searching for relevant memories with content:', content)
+        const relevantMemories = await memoryProcessor.searchRelevantMemories(
+          content,
+          processorConfig,
+          5 // Limit to top 5 most relevant memories
+        )
+
+        if (relevantMemories?.length > 0) {
+          console.log('Found relevant memories:', relevantMemories)
+
+          // Format memories for context injection
+          const memoryContext = relevantMemories.map((memory) => `- ${memory.memory}`).join('\n')
+
+          const memoryContent = `Here are some relevant facts and context about the user from previous conversations. Use this information to provide more personalized and contextually aware responses:
+
+<user_memory>
+${memoryContext}
+</user_memory>`
+
+          return [memoryContent]
+        }
+      }
+      console.warn('Memory is enabled but embedding or LLM model is not configured')
+      return []
+    } catch (error) {
+      console.error('Error processing memory search:', error)
+      // Continue with conversation even if memory processing fails
+      return []
+    }
+  }
+
   // --- Knowledge Base Search Function ---
   const searchKnowledgeBase = async (
     extractResults: ExtractResults | undefined
@@ -223,12 +268,14 @@ async function fetchExternalTool(
 
     let webSearchResponseFromSearch: WebSearchResponse | undefined
     let knowledgeReferencesFromSearch: KnowledgeReference[] | undefined
+    let memorySearchReferences: string[] | undefined
 
     // 并行执行搜索
-    if (shouldWebSearch || shouldKnowledgeSearch) {
-      ;[webSearchResponseFromSearch, knowledgeReferencesFromSearch] = await Promise.all([
+    if (shouldWebSearch || shouldKnowledgeSearch || shouldSearchMemory) {
+      ;[webSearchResponseFromSearch, knowledgeReferencesFromSearch, memorySearchReferences] = await Promise.all([
         searchTheWeb(extractResults),
-        searchKnowledgeBase(extractResults)
+        searchKnowledgeBase(extractResults),
+        searchMemory()
       ])
     }
 
@@ -239,6 +286,9 @@ async function fetchExternalTool(
       }
       if (knowledgeReferencesFromSearch) {
         window.keyv.set(`knowledge-search-${lastUserMessage.id}`, knowledgeReferencesFromSearch)
+      }
+      if (memorySearchReferences) {
+        window.keyv.set(`memory-search-${lastUserMessage.id}`, memorySearchReferences)
       }
     }
 
@@ -341,51 +391,6 @@ export async function fetchChatCompletion({
 
   const enableGenerateImage =
     isGenerateImageModel(model) && (isSupportedDisableGenerationModel(model) ? assistant.enableGenerateImage : true)
-
-  if (assistant.enableMemory) {
-    try {
-      const memoryConfig = selectMemoryConfig(store.getState())
-      const content = getMainTextContent(lastUserMessage)
-
-      if (memoryConfig.embedderModel && memoryConfig.llmModel) {
-        // Search for relevant memories
-        const processorConfig = MemoryProcessor.getProcessorConfig(
-          memoryConfig,
-          assistant.id,
-          'default-user' // TODO: Get actual user ID from context
-        )
-
-        const relevantMemories = await memoryProcessor.searchRelevantMemories(
-          content,
-          processorConfig,
-          5 // Limit to top 5 most relevant memories
-        )
-
-        if (relevantMemories?.length > 0) {
-          console.log('Found relevant memories:', relevantMemories)
-
-          // Format memories for context injection
-          const memoryContext = relevantMemories.map((memory) => `- ${memory.memory}`).join('\n')
-
-          const memoryContent = `Here are some relevant facts and context about the user from previous conversations. Use this information to provide more personalized and contextually aware responses:
-
-<user_memory>
-${memoryContext}
-</user_memory>`
-
-          const mainTextBlock = createMainTextBlock(lastUserMessage.id, memoryContent, {
-            status: MessageBlockStatus.SUCCESS
-          })
-          lastUserMessage.blocks.push(mainTextBlock.id)
-        }
-      } else {
-        console.warn('Memory is enabled but embedding or LLM model is not configured')
-      }
-    } catch (error) {
-      console.error('Error processing memory search:', error)
-      // Continue with conversation even if memory processing fails
-    }
-  }
 
   // --- Call AI Completions ---
   onChunkReceived({ type: ChunkType.LLM_RESPONSE_CREATED })
