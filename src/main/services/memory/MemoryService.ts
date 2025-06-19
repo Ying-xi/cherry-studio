@@ -14,6 +14,8 @@ import { app } from 'electron'
 import logger from 'electron-log'
 import path from 'path'
 
+import { MemoryQueries } from './queries'
+
 export interface EmbeddingOptions {
   model: string
   provider: string
@@ -97,47 +99,21 @@ export class MemoryService {
     if (!this.db) throw new Error('Database not initialized')
 
     // Create memories table with native vector support
-    await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS memories (
-        id TEXT PRIMARY KEY,
-        memory TEXT NOT NULL,
-        hash TEXT UNIQUE,
-        embedding F32_BLOB(1536), -- Native vector column (1536 dimensions for OpenAI embeddings)
-        metadata TEXT, -- JSON string
-        user_id TEXT,
-        agent_id TEXT,
-        run_id TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_deleted INTEGER DEFAULT 0
-      )
-    `)
+    await this.db.execute(MemoryQueries.createTables.memories)
 
     // Create memory history table
-    await this.db.execute(`
-      CREATE TABLE IF NOT EXISTS memory_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        memory_id TEXT NOT NULL,
-        previous_value TEXT,
-        new_value TEXT,
-        action TEXT NOT NULL, -- ADD, UPDATE, DELETE
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        is_deleted INTEGER DEFAULT 0,
-        FOREIGN KEY (memory_id) REFERENCES memories (id)
-      )
-    `)
+    await this.db.execute(MemoryQueries.createTables.memoryHistory)
 
     // Create indexes
-    await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id)')
-    await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memories_agent_id ON memories(agent_id)')
-    await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at)')
-    await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(hash)')
-    await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memory_history_memory_id ON memory_history(memory_id)')
+    await this.db.execute(MemoryQueries.createIndexes.userId)
+    await this.db.execute(MemoryQueries.createIndexes.agentId)
+    await this.db.execute(MemoryQueries.createIndexes.createdAt)
+    await this.db.execute(MemoryQueries.createIndexes.hash)
+    await this.db.execute(MemoryQueries.createIndexes.memoryHistory)
 
     // Create vector index for similarity search
     try {
-      await this.db.execute('CREATE INDEX IF NOT EXISTS idx_memories_vector ON memories (libsql_vector_idx(embedding))')
+      await this.db.execute(MemoryQueries.createIndexes.vector)
     } catch (error) {
       // Vector index might not be supported in all versions
       logger.warn('Failed to create vector index, falling back to non-indexed search:', error)
@@ -169,7 +145,7 @@ export class MemoryService {
 
         // Check if memory already exists
         const existing = await this.db.execute({
-          sql: 'SELECT id FROM memories WHERE hash = ? AND is_deleted = 0',
+          sql: MemoryQueries.memory.checkExists,
           args: [hash]
         })
 
@@ -194,10 +170,7 @@ export class MemoryService {
         const now = new Date().toISOString()
 
         await this.db.execute({
-          sql: `
-            INSERT INTO memories (id, memory, hash, embedding, metadata, user_id, agent_id, run_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `,
+          sql: MemoryQueries.memory.insert,
           args: [
             id,
             trimmedMemory,
@@ -289,19 +262,7 @@ export class MemoryService {
       params.push(limit)
 
       const result = await this.db.execute({
-        sql: `
-          SELECT 
-            m.id,
-            m.memory,
-            m.hash,
-            m.metadata,
-            m.user_id,
-            m.agent_id,
-            m.run_id,
-            m.created_at,
-            m.updated_at
-          FROM memories m
-          WHERE ${whereClause}
+        sql: `${MemoryQueries.memory.list} ${whereClause}
           ORDER BY m.created_at DESC
           LIMIT ?
         `,
@@ -359,7 +320,7 @@ export class MemoryService {
 
       // Get total count
       const countResult = await this.db.execute({
-        sql: `SELECT COUNT(*) as total FROM memories m WHERE ${whereClause}`,
+        sql: `${MemoryQueries.memory.count} ${whereClause}`,
         args: params
       })
       const totalCount = (countResult.rows[0] as any).total as number
@@ -367,19 +328,7 @@ export class MemoryService {
       // Get paginated results
       params.push(limit, offset)
       const result = await this.db.execute({
-        sql: `
-          SELECT 
-            m.id,
-            m.memory,
-            m.hash,
-            m.metadata,
-            m.user_id,
-            m.agent_id,
-            m.run_id,
-            m.created_at,
-            m.updated_at
-          FROM memories m
-          WHERE ${whereClause}
+        sql: `${MemoryQueries.memory.list} ${whereClause}
           ORDER BY m.created_at DESC
           LIMIT ? OFFSET ?
         `,
@@ -419,7 +368,7 @@ export class MemoryService {
     try {
       // Get current memory value for history
       const current = await this.db.execute({
-        sql: 'SELECT memory FROM memories WHERE id = ? AND is_deleted = 0',
+        sql: MemoryQueries.memory.getForDelete,
         args: [id]
       })
 
@@ -431,7 +380,7 @@ export class MemoryService {
 
       // Soft delete
       await this.db.execute({
-        sql: 'UPDATE memories SET is_deleted = 1, updated_at = ? WHERE id = ?',
+        sql: MemoryQueries.memory.softDelete,
         args: [new Date().toISOString(), id]
       })
 
@@ -455,7 +404,7 @@ export class MemoryService {
     try {
       // Get current memory
       const current = await this.db.execute({
-        sql: 'SELECT memory, metadata FROM memories WHERE id = ? AND is_deleted = 0',
+        sql: MemoryQueries.memory.getForUpdate,
         args: [id]
       })
 
@@ -485,11 +434,7 @@ export class MemoryService {
 
       // Update memory
       await this.db.execute({
-        sql: `
-          UPDATE memories 
-          SET memory = ?, hash = ?, embedding = ?, metadata = ?, updated_at = ?
-          WHERE id = ?
-        `,
+        sql: MemoryQueries.memory.update,
         args: [
           memory.trim(),
           hash,
@@ -519,11 +464,7 @@ export class MemoryService {
 
     try {
       const result = await this.db.execute({
-        sql: `
-          SELECT * FROM memory_history 
-          WHERE memory_id = ? AND is_deleted = 0
-          ORDER BY created_at DESC
-        `,
+        sql: MemoryQueries.history.getByMemoryId,
         args: [memoryId]
       })
 
@@ -551,8 +492,8 @@ export class MemoryService {
     if (!this.db) throw new Error('Database not initialized')
 
     try {
-      await this.db.execute('DELETE FROM memory_history')
-      await this.db.execute('DELETE FROM memories')
+      await this.db.execute(MemoryQueries.history.reset)
+      await this.db.execute(MemoryQueries.memory.reset)
       logger.info('All memories reset')
     } catch (error) {
       logger.error('Reset failed:', error)
@@ -666,47 +607,11 @@ export class MemoryService {
 
       const whereClause = conditions.join(' AND ')
 
-      const hybridQuery = `
-        SELECT 
-          m.id,
-          m.memory,
-          m.hash,
-          m.metadata,
-          m.user_id,
-          m.agent_id,
-          m.run_id,
-          m.created_at,
-          m.updated_at,
-          CASE 
-            WHEN m.embedding IS NULL THEN 2.0
-            ELSE vector_distance_cos(m.embedding, vector32(?))
-          END as distance,
-          CASE 
-            WHEN m.embedding IS NULL THEN 0.0
-            ELSE (1 - vector_distance_cos(m.embedding, vector32(?)))
-          END as vector_similarity,
-          CASE 
-            WHEN m.memory LIKE ? THEN 1.0
-            WHEN m.memory LIKE ? THEN 0.8
-            ELSE 0.0
-          END as text_similarity,
-          (
-            CASE 
-              WHEN m.embedding IS NULL THEN 0.0
-              ELSE (1 - vector_distance_cos(m.embedding, vector32(?))) * 0.7
-            END +
-            CASE 
-              WHEN m.memory LIKE ? THEN 1.0 * 0.3
-              WHEN m.memory LIKE ? THEN 0.8 * 0.3
-              ELSE 0.0
-            END
-          ) as combined_score
-        FROM memories m
-        WHERE ${whereClause}
-        HAVING combined_score >= ?
-        ORDER BY combined_score DESC
-        LIMIT ?
-      `
+      const hybridQuery = `${MemoryQueries.search.hybridSearch} ${whereClause}
+      ) AS results
+      WHERE combined_score >= ?
+      ORDER BY combined_score DESC
+      LIMIT ?`
 
       params.push(threshold, limit)
 
@@ -750,10 +655,7 @@ export class MemoryService {
 
     const now = new Date().toISOString()
     await this.db.execute({
-      sql: `
-        INSERT INTO memory_history (memory_id, previous_value, new_value, action, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `,
+      sql: MemoryQueries.history.insert,
       args: [memoryId, previousValue, newValue, action, now, now]
     })
   }
