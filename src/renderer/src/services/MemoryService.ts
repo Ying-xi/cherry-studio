@@ -164,11 +164,21 @@ class MemoryService {
   }
 
   /**
-   * Resets all memories (deletes everything)
+   * Resets all memories or memories for a specific user (hard delete)
+   * @param userId - Optional user ID to reset memories for specific user, omit to reset all
    * @returns Promise that resolves when reset is complete
    */
-  public async reset(): Promise<void> {
-    return window.api.memory.reset()
+  public async reset(userId?: string): Promise<void> {
+    return window.api.memory.reset(userId)
+  }
+
+  /**
+   * Deletes a user and all their memories (hard delete)
+   * @param userId - The user ID to delete
+   * @returns Promise that resolves when deletion is complete
+   */
+  public async deleteUser(userId: string): Promise<void> {
+    return window.api.memory.deleteUser(userId)
   }
 
   /**

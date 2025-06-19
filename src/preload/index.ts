@@ -139,8 +139,9 @@ const api = {
     update: (id: string, memory: string, metadata?: Record<string, any>) =>
       ipcRenderer.invoke(IpcChannel.Memory_Update, id, memory, metadata),
     get: (id: string) => ipcRenderer.invoke(IpcChannel.Memory_Get, id),
-    reset: () => ipcRenderer.invoke(IpcChannel.Memory_Reset),
-    setConfig: (config: MemoryConfig) => ipcRenderer.invoke(IpcChannel.Memory_SetConfig, config)
+    reset: (userId?: string) => ipcRenderer.invoke(IpcChannel.Memory_Reset, userId),
+    setConfig: (config: MemoryConfig) => ipcRenderer.invoke(IpcChannel.Memory_SetConfig, config),
+    deleteUser: (userId: string) => ipcRenderer.invoke(IpcChannel.Memory_DeleteUser, userId)
   },
   window: {
     setMinimumSize: (width: number, height: number) =>

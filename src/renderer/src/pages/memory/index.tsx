@@ -3,12 +3,14 @@ import {
   ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
+  ExclamationCircleOutlined,
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
   SearchOutlined,
   SettingOutlined,
   UserAddOutlined,
+  UserDeleteOutlined,
   UserOutlined
 } from '@ant-design/icons'
 import MemoryService from '@renderer/services/MemoryService'
@@ -708,6 +710,59 @@ const MemoriesPage = () => {
     form.resetFields()
   }
 
+  const handleDeleteUser = async (userId: string) => {
+    if (userId === 'default-user') {
+      message.error(t('memory.cannot_delete_default_user'))
+      return
+    }
+
+    Modal.confirm({
+      title: t('memory.delete_user_confirm_title'),
+      content: t('memory.delete_user_confirm_content', { user: userId }),
+      icon: <ExclamationCircleOutlined />,
+      okText: t('common.yes'),
+      cancelText: t('common.no'),
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await memoryService.deleteUser(userId)
+          message.success(t('memory.user_deleted', { user: userId }))
+
+          // Switch to default user if current user was deleted
+          if (currentUser === userId) {
+            await handleUserSwitch('default-user')
+          } else {
+            await loadMemories()
+          }
+        } catch (error) {
+          console.error('Failed to delete user:', error)
+          message.error(t('memory.delete_user_failed'))
+        }
+      }
+    })
+  }
+
+  const handleResetUserMemories = async (userId: string) => {
+    Modal.confirm({
+      title: t('memory.reset_user_memories_confirm_title'),
+      content: t('memory.reset_user_memories_confirm_content', { user: getUserDisplayName(userId) }),
+      icon: <ExclamationCircleOutlined />,
+      okText: t('common.yes'),
+      cancelText: t('common.no'),
+      okType: 'danger',
+      onOk: async () => {
+        try {
+          await memoryService.reset(userId)
+          message.success(t('memory.user_memories_reset', { user: getUserDisplayName(userId) }))
+          await loadMemories()
+        } catch (error) {
+          console.error('Failed to reset user memories:', error)
+          message.error(t('memory.reset_user_memories_failed'))
+        }
+      }
+    })
+  }
+
   const getMemoryActionMenuItems = (memory: MemoryItem): MenuProps['items'] => [
     {
       key: 'edit',
@@ -851,7 +906,7 @@ const MemoriesPage = () => {
                   size="large"
                   icon={<ReloadOutlined />}
                   loading={loading}
-                  onClick={loadMemories}
+                  onClick={() => loadMemories()}
                 />
               </Tooltip>
             </div>
@@ -894,9 +949,7 @@ const MemoriesPage = () => {
                       {getUserAvatar('default-user')}
                     </Avatar>
                     <span>{t('memory.default_user')}</span>
-                    <Tag color="blue" size="small">
-                      {t('memory.default')}
-                    </Tag>
+                    <Tag color="blue">{t('memory.default')}</Tag>
                   </Space>
                 </Option>
                 {uniqueUsers.map((user) => (
@@ -906,9 +959,7 @@ const MemoriesPage = () => {
                         {getUserAvatar(user)}
                       </Avatar>
                       <span>{user}</span>
-                      <Tag color="green" size="small">
-                        {t('memory.custom')}
-                      </Tag>
+                      <Tag color="green">{t('memory.custom')}</Tag>
                     </Space>
                   </Option>
                 ))}
@@ -920,6 +971,32 @@ const MemoriesPage = () => {
                 size="large">
                 {t('memory.add_user')}
               </Button>
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'resetMemories',
+                      label: t('memory.reset_user_memories'),
+                      icon: <ReloadOutlined />,
+                      onClick: () => handleResetUserMemories(currentUser)
+                    },
+                    ...(currentUser !== 'default-user'
+                      ? [
+                          {
+                            key: 'deleteUser',
+                            label: t('memory.delete_user'),
+                            icon: <UserDeleteOutlined />,
+                            danger: true,
+                            onClick: () => handleDeleteUser(currentUser)
+                          }
+                        ]
+                      : [])
+                  ]
+                }}
+                trigger={['click']}
+                placement="bottomRight">
+                <Button type="default" icon={<MoreOutlined />} size="large" />
+              </Dropdown>
             </div>
           </div>
         </HeaderCard>
