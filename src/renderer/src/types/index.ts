@@ -727,11 +727,11 @@ export type { Message } from './newMessage'
 // Memory Service Types
 // ========================================================================
 export interface MemoryConfig {
-  embedderModel: Model
-  embedderDimensions: number
-  embedderProvider: Provider
-  llmModel: Model
-  llmProvider: Provider
+  embedderModel?: Model
+  embedderDimensions?: number
+  embedderProvider?: Provider
+  llmModel?: Model
+  llmProvider?: Provider
   customFactExtractionPrompt?: string
   customUpdateMemoryPrompt?: string
 }

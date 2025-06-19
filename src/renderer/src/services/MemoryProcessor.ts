@@ -1,12 +1,12 @@
 import AiProvider from '@renderer/aiCore'
 import { AssistantMessage } from '@renderer/types'
-import { MemoryConfig, MemoryItem } from '@renderer/types/memory'
 import {
   FactRetrievalSchema,
   getFactRetrievalMessages,
   getUpdateMemoryMessages,
   MemoryUpdateSchema
 } from '@renderer/utils/memory-prompts'
+import { MemoryConfig, MemoryItem } from '@types'
 import { ChatCompletionMessageParam } from 'openai/resources'
 
 import { getProviderByModel } from './AssistantService'

@@ -9,6 +9,13 @@ import {
   MemorySearchResult
 } from '@types'
 
+// Main process SearchResult type (matches what the IPC actually returns)
+interface SearchResult {
+  memories: any[]
+  count: number
+  error?: string
+}
+
 import { getProviderByModel } from './AssistantService'
 
 /**
@@ -17,6 +24,7 @@ import { getProviderByModel } from './AssistantService'
  */
 class MemoryService {
   private static instance: MemoryService | null = null
+  private currentUserId: string = 'default-user'
 
   constructor() {
     this.init()
@@ -44,12 +52,54 @@ class MemoryService {
   }
 
   /**
+   * Sets the current user context for memory operations
+   * @param userId - The user ID to set as current context
+   */
+  public setCurrentUser(userId: string): void {
+    this.currentUserId = userId
+  }
+
+  /**
+   * Gets the current user context
+   * @returns The current user ID
+   */
+  public getCurrentUser(): string {
+    return this.currentUserId
+  }
+
+  /**
    * Lists all stored memories
    * @param config - Optional configuration for filtering memories
    * @returns Promise resolving to search results containing all memories
    */
   public async list(config?: MemoryListOptions): Promise<MemorySearchResult> {
-    return window.api.memory.list(config)
+    const configWithUser = {
+      ...config,
+      userId: this.currentUserId === 'default-user' ? undefined : this.currentUserId
+    }
+
+    try {
+      const result: SearchResult = await window.api.memory.list(configWithUser)
+
+      // Handle error responses from main process
+      if (result.error) {
+        console.error('Memory service error:', result.error)
+        throw new Error(result.error)
+      }
+
+      // Convert SearchResult to MemorySearchResult for consistency
+      return {
+        results: result.memories || [],
+        relations: []
+      }
+    } catch (error) {
+      console.error('Failed to list memories:', error)
+      // Return empty result on error to prevent UI crashes
+      return {
+        results: [],
+        relations: []
+      }
+    }
   }
 
   /**
@@ -59,7 +109,20 @@ class MemoryService {
    * @returns Promise resolving to search results of added memories
    */
   public async add(messages: string | AssistantMessage[], options: AddMemoryOptions): Promise<MemorySearchResult> {
-    return window.api.memory.add(messages, options)
+    const optionsWithUser = {
+      ...options,
+      metadata: {
+        ...options.metadata,
+        userId: options.metadata?.userId || this.currentUserId
+      }
+    }
+    const result: SearchResult = await window.api.memory.add(messages, optionsWithUser)
+
+    // Convert SearchResult to MemorySearchResult for consistency
+    return {
+      results: result.memories,
+      relations: []
+    }
   }
 
   /**
@@ -69,7 +132,17 @@ class MemoryService {
    * @returns Promise resolving to search results matching the query
    */
   public async search(query: string, options: MemorySearchOptions): Promise<MemorySearchResult> {
-    return window.api.memory.search(query, options)
+    const optionsWithUser = {
+      ...options,
+      userId: this.currentUserId === 'default-user' ? undefined : this.currentUserId
+    }
+    const result: SearchResult = await window.api.memory.search(query, optionsWithUser)
+
+    // Convert SearchResult to MemorySearchResult for consistency
+    return {
+      results: result.memories,
+      relations: []
+    }
   }
 
   /**
