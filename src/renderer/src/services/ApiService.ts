@@ -39,7 +39,6 @@ import { findFileBlocks, getMainTextContent } from '@renderer/utils/messageUtils
 import { findLast, isEmpty, takeRight } from 'lodash'
 
 import AiProvider from '../aiCore'
-import store from '../store'
 import {
   getAssistantProvider,
   getAssistantSettings,
@@ -207,9 +206,11 @@ ${memoryContext}
 
           return [memoryContent]
         }
+        return []
+      } else {
+        console.warn('Memory is enabled but embedding or LLM model is not configured')
+        return []
       }
-      console.warn('Memory is enabled but embedding or LLM model is not configured')
-      return []
     } catch (error) {
       console.error('Error processing memory search:', error)
       // Continue with conversation even if memory processing fails

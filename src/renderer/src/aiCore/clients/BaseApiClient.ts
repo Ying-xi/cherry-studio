@@ -267,7 +267,8 @@ export abstract class BaseApiClient<
   }
 
   private getMemoryReferencesFromCache(message: Message) {
-    return window.keyv.get(`memory-search-${message.id}`)
+    const memoryReferences = window.keyv.get(`memory-search-${message.id}`)
+    return memoryReferences || []
   }
 
   private async getWebSearchReferencesFromCache(message: Message) {
