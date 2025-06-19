@@ -46,17 +46,9 @@ interface MessagesProps {
   setActiveTopic: (topic: Topic) => void
   onComponentUpdate?(): void
   onFirstUpdate?(): void
-  style?: React.CSSProperties
 }
 
-const Messages: React.FC<MessagesProps> = ({
-  assistant,
-  topic,
-  setActiveTopic,
-  onComponentUpdate,
-  onFirstUpdate,
-  style
-}) => {
+const Messages: React.FC<MessagesProps> = ({ assistant, topic, setActiveTopic, onComponentUpdate, onFirstUpdate }) => {
   const { containerRef: scrollContainerRef, handleScroll: handleScrollPosition } = useScrollPosition(
     `topic-${topic.id}`
   )
@@ -279,7 +271,7 @@ const Messages: React.FC<MessagesProps> = ({
       id="messages"
       className="messages-container"
       ref={scrollContainerRef}
-      style={{ position: 'relative', paddingTop: showPrompt ? 10 : 0, ...style }}
+      style={{ position: 'relative', paddingTop: showPrompt ? 10 : 0, flex: 1, minHeight: 0 }}
       key={assistant.id}
       onScroll={handleScrollPosition}>
       <NarrowLayout style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

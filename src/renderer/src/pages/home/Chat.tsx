@@ -116,7 +116,6 @@ const Chat: FC<Props> = (props) => {
           onIncludeUserChange={userOutlinedItemClickHandler}
         />
         <Messages
-          style={{ flex: 1, minHeight: 0 }}
           key={props.activeTopic.id}
           assistant={assistant}
           topic={props.activeTopic}
