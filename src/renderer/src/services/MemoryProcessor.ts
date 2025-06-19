@@ -1,4 +1,3 @@
-import AiProvider from '@renderer/aiCore'
 import { AssistantMessage } from '@renderer/types'
 import {
   FactRetrievalSchema,
@@ -7,9 +6,8 @@ import {
   MemoryUpdateSchema
 } from '@renderer/utils/memory-prompts'
 import { MemoryConfig, MemoryItem } from '@types'
-import { ChatCompletionMessageParam } from 'openai/resources'
 
-import { getProviderByModel } from './AssistantService'
+import { fetchGenerate } from './ApiService'
 import MemoryService from './MemoryService'
 
 export interface MemoryProcessorConfig {
@@ -48,35 +46,12 @@ export class MemoryProcessor {
         memoryConfig.customFactExtractionPrompt
       )
 
-      // Create messages for LLM
-      const llmMessages: ChatCompletionMessageParam[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
-
-      // Call LLM for fact extraction
-      const provider = getProviderByModel(memoryConfig.llmModel)
-      const AI = new AiProvider(provider)
-
-      let responseContent = ''
-      await AI.completions({
-        callType: 'chat',
-        messages: llmMessages as any,
-        assistant: {
-          model: memoryConfig.llmModel,
-          settings: {
-            temperature: 0.1
-          }
-        } as any,
-        maxTokens: 1000,
-        onChunk: (chunk: any) => {
-          if (chunk.type === 'text' && chunk.text) {
-            responseContent += chunk.text
-          }
-        }
-      } as any)
-
-      if (!responseContent.trim()) {
+      const responseContent = await fetchGenerate({
+        prompt: systemPrompt,
+        content: userPrompt,
+        model: memoryConfig.llmModel
+      })
+      if (!responseContent || responseContent.trim() === '') {
         return []
       }
 
@@ -140,38 +115,14 @@ export class MemoryProcessor {
       // Generate update memory prompt
       const updatePrompt = getUpdateMemoryMessages(existingMemories, facts, memoryConfig.customUpdateMemoryPrompt)
 
-      // Create messages for LLM
-      const llmMessages: ChatCompletionMessageParam[] = [
-        { role: 'system', content: updatePrompt },
-        { role: 'user', content: 'Please process the new facts and update the memory accordingly.' }
-      ]
-
-      // Call LLM for memory update logic
-      const provider = getProviderByModel(memoryConfig.llmModel)
-      const AI = new AiProvider(provider)
-
-      let responseContent = ''
-      await AI.completions({
-        callType: 'chat',
-        messages: llmMessages as any,
-        assistant: {
-          model: memoryConfig.llmModel,
-          settings: {
-            temperature: 0.1
-          }
-        } as any,
-        maxTokens: 2000,
-        onChunk: (chunk: any) => {
-          if (chunk.type === 'text' && chunk.text) {
-            responseContent += chunk.text
-          }
-        }
-      } as any)
-
-      if (!responseContent.trim()) {
+      const responseContent = await fetchGenerate({
+        prompt: updatePrompt,
+        content: 'Please ONLY return the valid JSON response with memory operations',
+        model: memoryConfig.llmModel
+      })
+      if (!responseContent || responseContent.trim() === '') {
         return []
       }
-
       // Parse response using Zod schema
       try {
         const parsed = MemoryUpdateSchema.parse(JSON.parse(responseContent))
@@ -183,8 +134,7 @@ export class MemoryProcessor {
               try {
                 const result = await this.memoryService.add(memoryOp.text, {
                   userId,
-                  agentId: assistantId,
-                  metadata: { userId, assistantId }
+                  agentId: assistantId
                 })
                 operations.push({ action: 'ADD', memory: memoryOp.text, result })
               } catch (error) {

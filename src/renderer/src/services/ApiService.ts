@@ -610,8 +610,18 @@ export async function fetchSearchSummary({ messages, assistant }: { messages: Me
   return await AI.completions(params)
 }
 
-export async function fetchGenerate({ prompt, content }: { prompt: string; content: string }): Promise<string> {
-  const model = getDefaultModel()
+export async function fetchGenerate({
+  prompt,
+  content,
+  model
+}: {
+  prompt: string
+  content: string
+  model?: Model
+}): Promise<string> {
+  if (!model) {
+    model = getDefaultModel()
+  }
   const provider = getProviderByModel(model)
 
   if (!hasApiKey(provider)) {
