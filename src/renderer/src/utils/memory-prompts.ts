@@ -6,20 +6,16 @@ export const FactRetrievalSchema = z.object({
 })
 
 // Define Zod schema for memory update output
-export const MemoryUpdateSchema = z.object({
-  memory: z
-    .array(
-      z.object({
-        id: z.string().describe('The unique identifier of the memory item.'),
-        text: z.string().describe('The content of the memory item.'),
-        event: z
-          .enum(['ADD', 'UPDATE', 'DELETE', 'NONE'])
-          .describe('The action taken for this memory item (ADD, UPDATE, DELETE, or NONE).'),
-        old_memory: z.string().optional().describe('The previous content of the memory item if the event was UPDATE.')
-      })
-    )
-    .describe('An array representing the state of memory items after processing new facts.')
-})
+export const MemoryUpdateSchema = z.array(
+  z.object({
+    id: z.string().describe('The unique identifier of the memory item.'),
+    text: z.string().describe('The content of the memory item.'),
+    event: z
+      .enum(['ADD', 'UPDATE', 'DELETE', 'NONE'])
+      .describe('The action taken for this memory item (ADD, UPDATE, DELETE, or NONE).'),
+    old_memory: z.string().optional().describe('The previous content of the memory item if the event was UPDATE.')
+  })
+)
 
 export const factExtractionPrompt: string = `You are a Personal Information Organizer, specialized in accurately storing facts, user memories, and preferences. Your primary role is to extract relevant pieces of information from conversations and organize them into distinct, manageable facts. This allows for easy retrieval and personalization in future interactions. Below are the types of information you need to focus on and the detailed instructions on how to handle the input data.
   
@@ -96,20 +92,18 @@ export const updateMemoryPrompt: string = `You are a smart memory manager which 
               ]
           - Retrieved facts: ["Name is John"]
           - New Memory:
-              {
-                  "memory" : [
-                      {
-                          "id" : "0",
-                          "text" : "User is a software engineer",
-                          "event" : "NONE"
-                      },
-                      {
-                          "id" : "1",
-                          "text" : "Name is John",
-                          "event" : "ADD"
-                      }
-                  ]
-              }
+              [
+                    {
+                        "id" : "0",
+                        "text" : "User is a software engineer",
+                        "event" : "NONE"
+                    },
+                    {
+                        "id" : "1",
+                        "text" : "Name is John",
+                        "event" : "ADD"
+                    }
+                ]
   
   2. **Update**: If the retrieved facts contain information that is already present in the memory but the information is totally different, then you have to update it. 
       If the retrieved fact contains information that conveys the same thing as the elements present in the memory, then you have to keep the fact which has the most information. 
@@ -136,27 +130,25 @@ export const updateMemoryPrompt: string = `You are a smart memory manager which 
               ]
           - Retrieved facts: ["Loves chicken pizza", "Loves to play cricket with friends"]
           - New Memory:
-              {
-              "memory" : [
-                      {
-                          "id" : "0",
-                          "text" : "Loves cheese and chicken pizza",
-                          "event" : "UPDATE",
-                          "old_memory" : "I really like cheese pizza"
-                      },
-                      {
-                          "id" : "1",
-                          "text" : "User is a software engineer",
-                          "event" : "NONE"
-                      },
-                      {
-                          "id" : "2",
-                          "text" : "Loves to play cricket with friends",
-                          "event" : "UPDATE",
-                          "old_memory" : "User likes to play cricket"
-                      }
-                  ]
-              }
+              [
+                    {
+                        "id" : "0",
+                        "text" : "Loves cheese and chicken pizza",
+                        "event" : "UPDATE",
+                        "old_memory" : "I really like cheese pizza"
+                    },
+                    {
+                        "id" : "1",
+                        "text" : "User is a software engineer",
+                        "event" : "NONE"
+                    },
+                    {
+                        "id" : "2",
+                        "text" : "Loves to play cricket with friends",
+                        "event" : "UPDATE",
+                        "old_memory" : "User likes to play cricket"
+                    }
+                ]
   
   3. **Delete**: If the retrieved facts contain information that contradicts the information present in the memory, then you have to delete it. Or if the direction is to delete the memory, then you have to delete it.
       Please note to return the IDs in the output from the input IDs only and do not generate any new ID.
@@ -174,21 +166,19 @@ export const updateMemoryPrompt: string = `You are a smart memory manager which 
               ]
           - Retrieved facts: ["Dislikes cheese pizza"]
           - New Memory:
-              {
-              "memory" : [
-                      {
-                          "id" : "0",
-                          "text" : "Name is John",
-                          "event" : "NONE"
-                      },
-                      {
-                          "id" : "1",
-                          "text" : "Loves cheese pizza",
-                          "event" : "DELETE"
-                      }
+              [
+                {
+                    "id" : "0",
+                    "text" : "Name is John",
+                    "event" : "NONE"
+                },
+                {
+                    "id" : "1",
+                    "text" : "Loves cheese pizza",
+                    "event" : "DELETE"
+                }
               ]
-              }
-  
+
   4. **No Change**: If the retrieved facts contain information that is already present in the memory, then you do not need to make any changes.
       - **Example**:
           - Old Memory:
@@ -204,20 +194,18 @@ export const updateMemoryPrompt: string = `You are a smart memory manager which 
               ]
           - Retrieved facts: ["Name is John"]
           - New Memory:
-              {
-              "memory" : [
-                      {
-                          "id" : "0",
-                          "text" : "Name is John",
-                          "event" : "NONE"
-                      },
-                      {
-                          "id" : "1",
-                          "text" : "Loves cheese pizza",
-                          "event" : "NONE"
-                      }
-                  ]
-              }
+              [
+                    {
+                        "id" : "0",
+                        "text" : "Name is John",
+                        "event" : "NONE"
+                    },
+                    {
+                        "id" : "1",
+                        "text" : "Loves cheese pizza",
+                        "event" : "NONE"
+                    }
+                ]
 
   Below is the current content of my memory which I have collected till now. You have to update it in the following format only:
   

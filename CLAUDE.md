@@ -18,40 +18,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - You operate in an environment where `ast-grep` is available. For any search involving code structure or syntax, always default to `ast-grep --lang '<language>' -p '<pattern>'`. Only use text-based tools like `rg` or `grep` if explicitly instructed to perform a plain-text search.
 - When interpreting instructions, prioritize clarity, step-by-step reasoning, and explicit documentation of your process. Avoid making assumptions; ask for clarification if requirements are ambiguous.
 
-## Essential Commands
+## Build/Test Commands
 
-### Development
+- `yarn dev` - Start development server with hot reload
+- `yarn build` - Build for production (includes typecheck)
+- `yarn typecheck` - Check TypeScript types for both processes
+- `yarn lint` - Run ESLint and fix issues automatically
+- `yarn test` - Run all tests (Vitest)
+- `yarn test:main` - Run main process tests only
+- `yarn test:renderer` - Run renderer process tests only
+- `yarn test:watch` - Run tests in watch mode
+- `yarn test:e2e` - Run Playwright E2E tests
 
-```bash
-yarn dev          # Start development server with hot reload
-yarn debug        # Start with debugging enabled (inspect port 9222)
-```
+## Code Style Guidelines
 
-### Code Quality (run before committing)
-
-```bash
-yarn lint         # Run ESLint and fix issues
-yarn typecheck    # Check TypeScript types for both processes
-yarn test         # Run all tests
-```
-
-### Building
-
-```bash
-yarn build        # Build for production (all platforms)
-yarn build:win    # Build for Windows
-yarn build:mac    # Build for macOS
-yarn build:linux  # Build for Linux
-```
-
-### Testing
-
-```bash
-yarn test                 # Run all tests
-yarn test:watch          # Run tests in watch mode
-yarn test:coverage       # Generate coverage report
-yarn test:e2e            # Run Playwright E2E tests
-```
+- **Imports**: Use simple-import-sort plugin for automatic import ordering
+- **Formatting**: Prettier with single quotes, no semicolons, 120 char width, trailing commas none
+- **Types**: TypeScript strict mode, explicit return types optional
+- **Naming**: camelCase for variables/functions, PascalCase for components/types
+- **Components**: React functional components with hooks, styled-components for styling
+- **Error Handling**: Use try-catch blocks, proper error types, no unused variables
+- **File Structure**: Barrel exports, organized by feature/domain
+- **Aliases**: Use `@renderer/*`, `@shared/*`, `@types` path aliases
 
 ## Architecture Overview
 

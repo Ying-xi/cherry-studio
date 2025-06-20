@@ -400,7 +400,7 @@ export interface Shortcut {
 
 export type ProcessingStatus = 'pending' | 'processing' | 'completed' | 'failed'
 
-export type KnowledgeItemType = 'file' | 'url' | 'note' | 'sitemap' | 'directory'
+export type KnowledgeItemType = 'file' | 'url' | 'note' | 'sitemap' | 'directory' | 'memory'
 
 export type KnowledgeItem = {
   id: string
@@ -488,6 +488,7 @@ export type ExternalToolResult = {
   toolUse?: MCPToolResponse[]
   webSearch?: WebSearchResponse
   knowledge?: KnowledgeReference[]
+  memories?: MemoryItem[]
 }
 
 export type WebSearchProvider = {

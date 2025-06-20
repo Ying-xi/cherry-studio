@@ -16,6 +16,7 @@ import {
   MCPCallToolResponse,
   MCPTool,
   MCPToolResponse,
+  MemoryItem,
   Model,
   OpenAIServiceTier,
   Provider,
@@ -267,8 +268,17 @@ export abstract class BaseApiClient<
   }
 
   private getMemoryReferencesFromCache(message: Message) {
-    const memoryReferences = window.keyv.get(`memory-search-${message.id}`)
-    return memoryReferences || []
+    const memories = window.keyv.get(`memory-search-${message.id}`) as MemoryItem[] | undefined
+    if (memories) {
+      const memoryReferences: KnowledgeReference[] = memories.map((mem, index) => ({
+        id: index + 1,
+        content: `${mem.memory} -- Created at: ${mem.createdAt}`,
+        sourceUrl: '',
+        type: 'memory'
+      }))
+      return memoryReferences
+    }
+    return []
   }
 
   private async getWebSearchReferencesFromCache(message: Message) {

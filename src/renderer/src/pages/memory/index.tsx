@@ -1,12 +1,11 @@
 import {
-  ClockCircleOutlined,
+  CalendarOutlined,
   DeleteOutlined,
   EditOutlined,
   ExclamationCircleOutlined,
   MoreOutlined,
   PlusOutlined,
   ReloadOutlined,
-  SearchOutlined,
   SettingOutlined,
   UserAddOutlined,
   UserDeleteOutlined,
@@ -19,24 +18,20 @@ import {
   Avatar,
   Button,
   Card,
-  Col,
   Dropdown,
   Form,
   Input,
   Layout,
-  MenuProps,
   message,
   Modal,
   Pagination,
-  Row,
   Select,
   Space,
-  Spin,
-  Typography
+  Spin
 } from 'antd'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useDispatch, useSelector } from 'react-redux'
 import styled from 'styled-components'
@@ -45,25 +40,40 @@ import MemoriesSettingsModal from './settings-modal'
 
 dayjs.extend(relativeTime)
 
+const DEFAULT_USER_ID = 'default-user'
+
 const { Content } = Layout
-const { Paragraph } = Typography
 const { Option } = Select
 const { TextArea } = Input
 
 // Styled Components
 const StyledContent = styled(Content)`
-  padding: 24px;
+  padding: 0;
   background: var(--color-background);
   min-height: 100vh;
 `
 
 const HeaderSection = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 32px 0;
-  margin-bottom: 32px;
+  background: #ffffff;
   border-bottom: 1px solid var(--color-border);
+  padding: 24px;
+  margin-bottom: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  .header-container {
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .header-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
 
   .header-left {
     flex: 1;
@@ -71,99 +81,148 @@ const HeaderSection = styled.div`
 
   .header-title {
     color: var(--color-text);
-    margin: 0 0 8px 0;
+    margin: 0 0 4px 0;
     font-weight: 600;
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1.2;
   }
 
   .header-subtitle {
     color: var(--color-text-secondary);
     margin: 0;
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 400;
   }
 
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
   }
 
   .user-selector {
-    min-width: 200px;
+    min-width: 180px;
   }
 
   .user-avatar {
     background: var(--color-primary);
     color: white;
+    font-weight: 600;
   }
-`
 
-const SearchSection = styled.div`
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: center;
+  .search-section {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+  }
 
   .search-input {
-    max-width: 600px;
+    max-width: 100%;
     width: 100%;
   }
 `
 
+const MainContent = styled.div`
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 32px 24px;
+`
+
 const MemoryCard = styled(Card)`
   background: #ffffff;
-  border: 1px solid #f0f0f0;
-  border-radius: 16px;
-  margin-bottom: 24px;
-  transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
 
   &:hover {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     border-color: var(--color-primary);
-    transform: translateY(-4px);
+    transform: translateY(-2px) scale(1.01);
   }
 
   .ant-card-body {
-    padding: 28px;
+    padding: 24px;
   }
 
   .memory-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .memory-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     color: var(--color-text-tertiary);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
 
   .memory-content {
     color: var(--color-text);
     font-size: 16px;
-    line-height: 1.7;
+    line-height: 1.6;
     margin: 0;
     font-weight: 400;
+    word-break: break-word;
+    cursor: text;
+    transition: background-color 0.2s ease;
+    padding: 4px;
+    border-radius: 4px;
+
+    &:hover {
+      background-color: rgba(var(--color-primary-rgb), 0.05);
+    }
   }
 
   .memory-actions {
+    position: absolute;
+    top: 16px;
+    right: 16px;
     display: flex;
-    justify-content: flex-end;
     align-items: center;
-    margin-top: 20px;
+    gap: 4px;
     opacity: 0;
     transition: opacity 0.2s ease;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 4px;
+    border-radius: 8px;
+    backdrop-filter: blur(4px);
   }
 
   &:hover .memory-actions {
     opacity: 1;
+  }
+
+  .quick-edit-btn {
+    border: none;
+    background: transparent;
+    color: var(--color-text-secondary);
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: var(--color-primary);
+      background: rgba(var(--color-primary-rgb), 0.1);
+    }
+  }
+
+  .inline-edit-container {
+    margin-bottom: 12px;
+  }
+
+  .inline-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
   }
 `
 
@@ -194,11 +253,6 @@ const EmptyStateContainer = styled.div`
     margin-right: auto;
     line-height: 1.5;
   }
-`
-
-const LoadingContainer = styled.div`
-  text-align: center;
-  padding: 60px 20px;
 `
 
 const PaginationContainer = styled.div`
@@ -393,7 +447,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({ visible, onCancel, onAdd, e
       return Promise.reject(new Error(t('memory.user_id_required')))
     }
     const trimmedValue = value.trim()
-    if (trimmedValue === 'default-user') {
+    if (trimmedValue === DEFAULT_USER_ID) {
       return Promise.reject(new Error(t('memory.user_id_reserved')))
     }
     if (existingUsers.includes(trimmedValue)) {
@@ -470,6 +524,7 @@ const MemoriesPage = () => {
   const [allMemories, setAllMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searchText, setSearchText] = useState('')
+  const [debouncedSearchText, setDebouncedSearchText] = useState('')
   const [settingsModalVisible, setSettingsModalVisible] = useState(false)
   const [addMemoryModalVisible, setAddMemoryModalVisible] = useState(false)
   const [editingMemory, setEditingMemory] = useState<MemoryItem | null>(null)
@@ -482,11 +537,11 @@ const MemoriesPage = () => {
 
   // Utility functions
   const getUserDisplayName = (user: string) => {
-    return user === 'default-user' ? t('memory.default_user') : user
+    return user === DEFAULT_USER_ID ? t('memory.default_user') : user
   }
 
   const getUserAvatar = (user: string) => {
-    return user === 'default-user' ? user.slice(0, 1).toUpperCase() : user.slice(0, 2).toUpperCase()
+    return user === DEFAULT_USER_ID ? user.slice(0, 1).toUpperCase() : user.slice(0, 2).toUpperCase()
   }
 
   // Load unique users from database
@@ -533,16 +588,27 @@ const MemoriesPage = () => {
     // Reset to first page when user changes
     setCurrentPage(1)
     loadMemories(currentUser)
-  }, [currentUser]) // Removed loadMemories from dependencies to avoid infinite loop
+  }, [currentUser, loadMemories])
 
-  // Filter memories based on search criteria
-  const filteredMemories = allMemories.filter((memory) => {
-    // Search text filter
-    if (searchText && !memory.memory.toLowerCase().includes(searchText.toLowerCase())) {
-      return false
-    }
-    return true
-  })
+  // Debounce search text
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchText(searchText)
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [searchText])
+
+  // Filter memories based on search criteria with debounced search
+  const filteredMemories = useMemo(() => {
+    return allMemories.filter((memory) => {
+      // Search text filter
+      if (debouncedSearchText && !memory.memory.toLowerCase().includes(debouncedSearchText.toLowerCase())) {
+        return false
+      }
+      return true
+    })
+  }, [allMemories, debouncedSearchText])
 
   // Calculate paginated memories
   const startIndex = (currentPage - 1) * pageSize
@@ -554,6 +620,11 @@ const MemoriesPage = () => {
     // Reset to first page when searching
     setCurrentPage(1)
   }
+
+  // Reset to first page when debounced search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchText])
 
   const handlePageChange = (page: number, size?: number) => {
     setCurrentPage(page)
@@ -622,7 +693,7 @@ const MemoriesPage = () => {
       await loadMemories(userId)
 
       message.success(
-        t('memory.user_switched', { user: userId === 'default-user' ? t('memory.default_user') : userId })
+        t('memory.user_switched', { user: userId === DEFAULT_USER_ID ? t('memory.default_user') : userId })
       )
     } catch (error) {
       console.error('Failed to switch user:', error)
@@ -661,7 +732,7 @@ const MemoriesPage = () => {
   }
 
   const handleDeleteUser = async (userId: string) => {
-    if (userId === 'default-user') {
+    if (userId === DEFAULT_USER_ID) {
       message.error(t('memory.cannot_delete_default_user'))
       return
     }
@@ -683,7 +754,7 @@ const MemoriesPage = () => {
 
           // Switch to default user if current user was deleted
           if (currentUser === userId) {
-            await handleUserSwitch('default-user')
+            await handleUserSwitch(DEFAULT_USER_ID)
           } else {
             await loadMemories(currentUser)
           }
@@ -695,216 +766,202 @@ const MemoriesPage = () => {
     })
   }
 
-  const getMemoryActionMenuItems = (memory: MemoryItem): MenuProps['items'] => [
-    {
-      key: 'edit',
-      label: t('common.edit'),
-      icon: <EditOutlined />,
-      onClick: () => handleEditMemory(memory)
-    },
-    {
-      key: 'delete',
-      label: t('common.delete'),
-      icon: <DeleteOutlined />,
-      danger: true,
-      onClick: () => {
-        Modal.confirm({
-          title: t('memory.delete_confirm'),
-          content: t('memory.delete_confirm_single'),
-          onOk: () => handleDeleteMemory(memory.id),
-          okText: t('common.yes'),
-          cancelText: t('common.no')
-        })
-      }
-    }
-  ]
-
-  const renderMemoryCards = () => {
-    if (loading) {
-      return (
-        <LoadingContainer>
-          <Spin size="large" />
-          <div style={{ marginTop: 16, color: 'var(--color-text-secondary)' }}>{t('memory.loading_memories')}</div>
-        </LoadingContainer>
-      )
-    }
-
-    if (filteredMemories.length === 0) {
-      return (
-        <EmptyStateContainer>
-          <div className="empty-icon">📚</div>
-          <div className="empty-title">
-            {allMemories.length === 0 ? t('memory.no_memories') : t('memory.no_matching_memories')}
-          </div>
-          <div className="empty-description">
-            {allMemories.length === 0 ? t('memory.no_memories_description') : t('memory.try_different_filters')}
-          </div>
-          {allMemories.length === 0 && (
-            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setAddMemoryModalVisible(true)}>
-              {t('memory.add_first_memory')}
-            </Button>
-          )}
-        </EmptyStateContainer>
-      )
-    }
-
-    return (
-      <Row gutter={[24, 24]}>
-        {paginatedMemories.map((memory) => (
-          <Col key={memory.id} xs={24} sm={24} md={12} lg={8}>
-            <MemoryCard>
-              <div className="memory-header">
-                <div className="memory-meta">
-                  <ClockCircleOutlined />
-                  <span>{memory.createdAt ? dayjs(memory.createdAt).fromNow() : '-'}</span>
-                </div>
-                <Dropdown
-                  menu={{ items: getMemoryActionMenuItems(memory) }}
-                  trigger={['click']}
-                  placement="bottomRight">
-                  <Button type="text" icon={<MoreOutlined />} size="small" />
-                </Dropdown>
-              </div>
-
-              <Paragraph className="memory-content" ellipsis={{ rows: 4, expandable: true, symbol: 'more' }}>
-                {memory.memory}
-              </Paragraph>
-
-              <div className="memory-actions">
-                <Space size="small">
-                  <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEditMemory(memory)}>
-                    {t('common.edit')}
-                  </Button>
-                </Space>
-              </div>
-            </MemoryCard>
-          </Col>
-        ))}
-      </Row>
-    )
-  }
-
   return (
     <Layout>
       <StyledContent>
-        {/* Clean Header Section */}
         <HeaderSection>
-          <div className="header-left">
-            <h1 className="header-title">{t('memory.memories')}</h1>
-            <p className="header-subtitle">
-              {allMemories.length} {allMemories.length === 1 ? t('memory.memory') : t('memory.memories')} •{' '}
-              {getUserDisplayName(currentUser)}
-            </p>
-          </div>
-          <div className="header-actions">
-            <Select
-              value={currentUser}
-              onChange={handleUserSwitch}
-              className="user-selector"
-              placeholder={t('memory.select_user')}
-              size="large"
-              dropdownRender={(menu) => (
-                <>
-                  {menu}
-                  <div style={{ padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
-                    <Button
-                      type="text"
-                      icon={<UserAddOutlined />}
-                      onClick={() => setAddUserModalVisible(true)}
-                      style={{ width: '100%', textAlign: 'left' }}>
-                      {t('memory.add_new_user')}
-                    </Button>
-                  </div>
-                </>
-              )}>
-              <Option value="default-user">
-                <Space>
-                  <Avatar size={20} className="user-avatar">
-                    {getUserAvatar('default-user')}
-                  </Avatar>
-                  <span>{t('memory.default_user')}</span>
-                </Space>
-              </Option>
-              {uniqueUsers.map((user) => (
-                <Option key={user} value={user}>
-                  <Space>
-                    <Avatar size={20} className="user-avatar">
-                      {getUserAvatar(user)}
-                    </Avatar>
-                    <span>{user}</span>
-                  </Space>
-                </Option>
-              ))}
-            </Select>
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'settings',
-                    label: t('common.settings'),
-                    icon: <SettingOutlined />,
-                    onClick: () => setSettingsModalVisible(true)
-                  },
-                  {
-                    key: 'refresh',
-                    label: t('common.refresh'),
-                    icon: <ReloadOutlined />,
-                    onClick: () => loadMemories(currentUser)
-                  },
-                  ...(currentUser !== 'default-user'
-                    ? [
-                        {
-                          key: 'deleteUser',
-                          label: t('memory.delete_user'),
-                          icon: <UserDeleteOutlined />,
-                          danger: true,
-                          onClick: () => handleDeleteUser(currentUser)
-                        }
-                      ]
-                    : [])
-                ]
-              }}
-              trigger={['click']}
-              placement="bottomRight">
-              <Button type="text" icon={<MoreOutlined />} size="large" />
-            </Dropdown>
-            <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setAddMemoryModalVisible(true)}>
-              {t('memory.add_memory')}
-            </Button>
+          <div className="header-container">
+            <div className="header-top">
+              <div className="header-left">
+                <h1 className="header-title">{t('memory.memories')}</h1>
+                <p className="header-subtitle">
+                  {allMemories.length} {allMemories.length === 1 ? t('memory.memory') : t('memory.memories')} •{' '}
+                  {getUserDisplayName(currentUser)}
+                </p>
+              </div>
+              <div className="header-actions">
+                <Select
+                  value={currentUser}
+                  onChange={handleUserSwitch}
+                  className="user-selector"
+                  placeholder={t('memory.select_user')}
+                  size="middle"
+                  dropdownRender={(menu) => (
+                    <>
+                      {menu}
+                      <div style={{ padding: '8px 0', borderTop: '1px solid #f0f0f0' }}>
+                        <Button
+                          type="text"
+                          icon={<UserAddOutlined />}
+                          onClick={() => setAddUserModalVisible(true)}
+                          style={{ width: '100%', textAlign: 'left' }}>
+                          {t('memory.add_new_user')}
+                        </Button>
+                      </div>
+                    </>
+                  )}>
+                  <Option value={DEFAULT_USER_ID}>
+                    <Space>
+                      <Avatar size={20} className="user-avatar">
+                        {getUserAvatar(DEFAULT_USER_ID)}
+                      </Avatar>
+                      <span>{t('memory.default_user')}</span>
+                    </Space>
+                  </Option>
+                  {uniqueUsers
+                    .filter((user) => user !== DEFAULT_USER_ID)
+                    .map((user) => (
+                      <Option key={user} value={user}>
+                        <Space>
+                          <Avatar size={20} className="user-avatar">
+                            {getUserAvatar(user)}
+                          </Avatar>
+                          <span>{user}</span>
+                        </Space>
+                      </Option>
+                    ))}
+                </Select>
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'settings',
+                        label: t('common.settings'),
+                        icon: <SettingOutlined />,
+                        onClick: () => setSettingsModalVisible(true)
+                      },
+                      {
+                        key: 'refresh',
+                        label: t('common.refresh'),
+                        icon: <ReloadOutlined />,
+                        onClick: () => loadMemories(currentUser)
+                      },
+                      ...(currentUser !== DEFAULT_USER_ID
+                        ? [
+                            {
+                              key: 'deleteUser',
+                              label: t('memory.delete_user'),
+                              icon: <UserDeleteOutlined />,
+                              danger: true,
+                              onClick: () => handleDeleteUser(currentUser)
+                            }
+                          ]
+                        : [])
+                    ]
+                  }}
+                  trigger={['click']}
+                  placement="bottomRight">
+                  <Button type="text" icon={<MoreOutlined />} size="middle" />
+                </Dropdown>
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => setAddMemoryModalVisible(true)}>
+                  {t('memory.add_memory')}
+                </Button>
+              </div>
+            </div>
+            <div className="search-section">
+              <Input.Search
+                className="search-input"
+                placeholder={t('memory.search_placeholder')}
+                size="large"
+                value={searchText}
+                onChange={(e) => handleSearch(e.target.value)}
+                allowClear
+              />
+            </div>
           </div>
         </HeaderSection>
 
-        {/* Clean Search Section */}
-        <SearchSection>
-          <Input
-            className="search-input"
-            placeholder={t('memory.search_placeholder')}
-            value={searchText}
-            onChange={(e) => handleSearch(e.target.value)}
-            allowClear
-            size="large"
-            prefix={<SearchOutlined />}
-          />
-        </SearchSection>
+        <MainContent>
+          {loading && (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <Spin size="large" />
+              <div style={{ marginTop: 16, color: 'var(--color-text-secondary)', fontSize: 14 }}>
+                {t('memory.loading')}
+              </div>
+            </div>
+          )}
 
-        {/* Memory Cards Section */}
-        {renderMemoryCards()}
+          {!loading && filteredMemories.length === 0 && (
+            <EmptyStateContainer>
+              <div className="empty-icon">📚</div>
+              <div className="empty-title">
+                {allMemories.length === 0 ? t('memory.no_memories') : t('memory.no_matching_memories')}
+              </div>
+              <div className="empty-description">
+                {allMemories.length === 0 ? t('memory.no_memories_description') : t('memory.try_different_filters')}
+              </div>
+              {allMemories.length === 0 && (
+                <Button
+                  type="primary"
+                  size="large"
+                  icon={<PlusOutlined />}
+                  onClick={() => setAddMemoryModalVisible(true)}>
+                  {t('memory.add_first_memory')}
+                </Button>
+              )}
+            </EmptyStateContainer>
+          )}
 
-        {/* Pagination */}
-        {!loading && filteredMemories.length > 0 && (
-          <PaginationContainer>
-            <Pagination
-              current={currentPage}
-              pageSize={pageSize}
-              total={filteredMemories.length}
-              onChange={handlePageChange}
-              showSizeChanger
-              showTotal={(total, range) => `${range[0]}-${range[1]} of ${total} memories`}
-              pageSizeOptions={['20', '50', '100', '200']}
-              defaultPageSize={50}
-            />
-          </PaginationContainer>
-        )}
+          {paginatedMemories.map((memory) => (
+            <MemoryCard key={memory.id}>
+              <div className="memory-header">
+                <div className="memory-meta">
+                  <CalendarOutlined />
+                  <span>{memory.createdAt ? dayjs(memory.createdAt).fromNow() : '-'}</span>
+                </div>
+              </div>
+              <p className="memory-content">{memory.memory}</p>
+              <div className="memory-actions">
+                <Button
+                  className="quick-edit-btn"
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEditMemory(memory)}
+                />
+                <Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'delete',
+                        label: t('common.delete'),
+                        icon: <DeleteOutlined />,
+                        danger: true,
+                        onClick: () => {
+                          Modal.confirm({
+                            title: t('memory.delete_confirm'),
+                            content: t('memory.delete_confirm_single'),
+                            onOk: () => handleDeleteMemory(memory.id),
+                            okText: t('common.confirm'),
+                            cancelText: t('common.cancel')
+                          })
+                        }
+                      }
+                    ]
+                  }}
+                  trigger={['click']}
+                  placement="topRight">
+                  <Button className="quick-edit-btn" type="text" size="small" icon={<MoreOutlined />} />
+                </Dropdown>
+              </div>
+            </MemoryCard>
+          ))}
+
+          {!loading && filteredMemories.length > 0 && (
+            <PaginationContainer>
+              <Pagination
+                current={currentPage}
+                pageSize={pageSize}
+                total={filteredMemories.length}
+                onChange={handlePageChange}
+                showSizeChanger
+                showTotal={(total, range) => `${range[0]}-${range[1]} of ${total} memories`}
+                pageSizeOptions={['20', '50', '100', '200']}
+                defaultPageSize={50}
+              />
+            </PaginationContainer>
+          )}
+        </MainContent>
 
         {/* Add Memory Modal */}
         <AddMemoryModal
@@ -926,7 +983,7 @@ const MemoriesPage = () => {
           visible={addUserModalVisible}
           onCancel={() => setAddUserModalVisible(false)}
           onAdd={handleAddUser}
-          existingUsers={[...uniqueUsers, 'default-user']}
+          existingUsers={[...uniqueUsers, DEFAULT_USER_ID]}
         />
 
         {/* Settings Modal */}

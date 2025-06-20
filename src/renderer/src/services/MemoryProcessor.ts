@@ -128,7 +128,7 @@ export class MemoryProcessor {
         const parsed = MemoryUpdateSchema.parse(JSON.parse(responseContent))
         const operations: Array<{ action: string; [key: string]: any }> = []
 
-        for (const memoryOp of parsed.memory) {
+        for (const memoryOp of parsed) {
           switch (memoryOp.event) {
             case 'ADD':
               try {
@@ -181,7 +181,7 @@ export class MemoryProcessor {
 
         return operations
       } catch (parseError) {
-        console.error('Failed to parse memory update response:', parseError)
+        console.error('Failed to parse memory update response:', parseError, 'responseContent: ', responseContent)
         return []
       }
     } catch (error) {
@@ -232,6 +232,16 @@ export class MemoryProcessor {
         limit
       })
 
+      console.log(
+        'Searching memories with query:',
+        query,
+        'for user:',
+        userId,
+        'and assistant:',
+        assistantId,
+        'result: ',
+        result
+      )
       return result.results
     } catch (error) {
       console.error('Error searching memories:', error)

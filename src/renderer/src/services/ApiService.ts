@@ -24,6 +24,7 @@ import {
   ExternalToolResult,
   KnowledgeReference,
   MCPTool,
+  MemoryItem,
   Model,
   Provider,
   WebSearchResponse,
@@ -77,7 +78,7 @@ async function fetchExternalTool(
   const shouldSearchMemory = assistant.enableMemory
 
   // 在工具链开始时发送进度通知
-  const willUseTools = shouldWebSearch || shouldKnowledgeSearch
+  const willUseTools = shouldWebSearch || shouldKnowledgeSearch || shouldSearchMemory
   if (willUseTools) {
     onChunkReceived({ type: ChunkType.EXTERNEL_TOOL_IN_PROGRESS })
   }
@@ -171,7 +172,7 @@ async function fetchExternalTool(
     }
   }
 
-  const searchMemory = async (): Promise<string[] | undefined> => {
+  const searchMemory = async (): Promise<MemoryItem[] | undefined> => {
     if (!shouldSearchMemory) return []
     try {
       const memoryConfig = selectMemoryConfig(store.getState())
@@ -195,16 +196,7 @@ async function fetchExternalTool(
         if (relevantMemories?.length > 0) {
           console.log('Found relevant memories:', relevantMemories)
 
-          // Format memories for context injection
-          const memoryContext = relevantMemories.map((memory) => `- ${memory.memory}`).join('\n')
-
-          const memoryContent = `Here are some relevant facts and context about the user from previous conversations. Use this information to provide more personalized and contextually aware responses:
-
-<user_memory>
-${memoryContext}
-</user_memory>`
-
-          return [memoryContent]
+          return relevantMemories
         }
         return []
       } else {
@@ -270,7 +262,7 @@ ${memoryContext}
 
     let webSearchResponseFromSearch: WebSearchResponse | undefined
     let knowledgeReferencesFromSearch: KnowledgeReference[] | undefined
-    let memorySearchReferences: string[] | undefined
+    let memorySearchReferences: MemoryItem[] | undefined
 
     // 并行执行搜索
     if (shouldWebSearch || shouldKnowledgeSearch || shouldSearchMemory) {
@@ -300,7 +292,8 @@ ${memoryContext}
         type: ChunkType.EXTERNEL_TOOL_COMPLETE,
         external_tool: {
           webSearch: webSearchResponseFromSearch,
-          knowledge: knowledgeReferencesFromSearch
+          knowledge: knowledgeReferencesFromSearch,
+          memories: memorySearchReferences
         }
       })
     }
