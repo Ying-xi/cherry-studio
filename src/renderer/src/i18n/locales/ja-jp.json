@@ -2133,7 +2133,7 @@
       "user": "ユーザー",
       "content": "内容",
       "score": "スコア",
-      "memories": "メモリー",
+      "title": "メモリー",
       "memories_description": "{{total}}件中{{count}}件のメモリーを表示",
       "search_placeholder": "メモリーを検索...",
       "start_date": "開始日",

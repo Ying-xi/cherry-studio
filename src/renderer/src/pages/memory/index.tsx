@@ -773,9 +773,9 @@ const MemoriesPage = () => {
           <div className="header-container">
             <div className="header-top">
               <div className="header-left">
-                <h1 className="header-title">{t('memory.memories')}</h1>
+                <h1 className="header-title">{t('memory.title')}</h1>
                 <p className="header-subtitle">
-                  {allMemories.length} {allMemories.length === 1 ? t('memory.memory') : t('memory.memories')} •{' '}
+                  {allMemories.length} {allMemories.length === 1 ? t('memory.memory') : t('memory.title')} •{' '}
                   {getUserDisplayName(currentUser)}
                 </p>
               </div>

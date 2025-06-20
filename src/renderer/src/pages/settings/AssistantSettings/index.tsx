@@ -84,7 +84,7 @@ const AssistantSettingPopupContainer: React.FC<Props> = ({ resolve, tab, ...prop
     },
     {
       key: 'memory',
-      label: t('assistants.settings.memory.title', 'Memory')
+      label: t('memory.title', 'Memory')
     }
   ].filter(Boolean) as { key: string; label: string }[]
 
@@ -155,6 +155,7 @@ const AssistantSettingPopupContainer: React.FC<Props> = ({ resolve, tab, ...prop
               assistant={assistant}
               updateAssistant={updateAssistant}
               updateAssistantSettings={updateAssistantSettings}
+              onClose={onCancel}
             />
           )}
         </Settings>

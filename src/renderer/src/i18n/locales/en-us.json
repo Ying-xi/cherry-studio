@@ -2112,6 +2112,8 @@
       }
     },
     "memory": {
+      "title": "Memories",
+      "description": "Memory allows you to store and manage information about your interactions with the assistant. You can add, edit, and delete memories, as well as filter and search through them.",
       "add_memory": "Add Memory",
       "edit_memory": "Edit Memory",
       "memory_content": "Memory Content",
@@ -2133,7 +2135,6 @@
       "user": "User",
       "content": "Content",
       "score": "Score",
-      "memories": "Memories",
       "memories_description": "Showing {{count}} of {{total}} memories",
       "search_placeholder": "Search memories...",
       "start_date": "Start Date",

@@ -2133,7 +2133,7 @@
       "user": "使用者",
       "content": "內容",
       "score": "分數",
-      "memories": "記憶",
+      "title": "記憶",
       "memories_description": "顯示 {{count}} / {{total}} 條記憶",
       "search_placeholder": "搜尋記憶...",
       "start_date": "開始日期",

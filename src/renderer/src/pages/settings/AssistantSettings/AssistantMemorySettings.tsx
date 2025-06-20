@@ -12,15 +12,16 @@ import styled from 'styled-components'
 
 import MemoriesSettingsModal from '../../memory/settings-modal'
 
-const { Text, Paragraph } = Typography
+const { Text } = Typography
 
 interface Props {
   assistant: Assistant
   updateAssistant: (assistant: Assistant) => void
   updateAssistantSettings: (settings: AssistantSettings) => void
+  onClose?: () => void // Add optional close callback
 }
 
-const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }) => {
+const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant, onClose }) => {
   const { t } = useTranslation()
   const memoryConfig = useSelector(selectMemoryConfig)
   const [memoryStats, setMemoryStats] = useState<{ count: number; loading: boolean }>({
@@ -54,6 +55,15 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
     updateAssistant({ ...assistant, enableMemory: enabled })
   }
 
+  const handleNavigateToMemory = () => {
+    // Close current modal/page first
+    if (onClose) {
+      onClose()
+    }
+    // Then navigate to memory page
+    window.location.hash = '#/memory'
+  }
+
   const isMemoryConfigured = memoryConfig.embedderModel && memoryConfig.llmModel
 
   return (
@@ -70,7 +80,7 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
           </Tooltip>
         </Box>
         <Space>
-          <Button size="small" icon={<SettingOutlined />} onClick={() => setSettingsModalVisible(true)}>
+          <Button size="small" icon={<SettingOutlined />} onClick={handleNavigateToMemory}>
             {t('common.settings')}
           </Button>
           <Switch
@@ -102,12 +112,6 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
       <Card size="small" style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
-            <Text strong>{t('memory.status', 'Status')}: </Text>
-            <Text type={assistant.enableMemory ? 'success' : 'secondary'}>
-              {assistant.enableMemory ? t('common.enabled') : t('common.disabled')}
-            </Text>
-          </div>
-          <div>
             <Text strong>{t('memory.stored_memories', 'Stored Memories')}: </Text>
             <Text>{memoryStats.loading ? t('common.loading') : memoryStats.count}</Text>
           </div>
@@ -125,18 +129,6 @@ const AssistantMemorySettings: React.FC<Props> = ({ assistant, updateAssistant }
           )}
         </Space>
       </Card>
-
-      <InfoCard>
-        <Paragraph type="secondary" style={{ margin: 0, fontSize: '13px' }}>
-          {t('memory.assistant_info', 'When memory is enabled, this assistant will:')}
-        </Paragraph>
-        <ul style={{ margin: '8px 0 0 16px', fontSize: '13px', color: 'var(--color-text-2)' }}>
-          <li>{t('memory.feature_1', 'Remember facts and preferences from conversations')}</li>
-          <li>{t('memory.feature_2', 'Provide more personalized responses based on context')}</li>
-          <li>{t('memory.feature_3', 'Automatically extract and store relevant information')}</li>
-          <li>{t('memory.feature_4', 'Search memories to enhance conversation relevance')}</li>
-        </ul>
-      </InfoCard>
 
       <MemoriesSettingsModal
         visible={settingsModalVisible}
@@ -167,13 +159,6 @@ const InfoIcon = styled(InfoCircleOutlined)`
   font-size: 14px;
   color: var(--color-text-2);
   cursor: help;
-`
-
-const InfoCard = styled.div`
-  padding: 12px;
-  background-color: var(--color-background-soft);
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
 `
 
 export default AssistantMemorySettings
