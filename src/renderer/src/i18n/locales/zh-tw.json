@@ -2183,7 +2183,8 @@
       "delete_confirm_single": "確定要刪除這個記憶嗎？",
       "total_memories": "個記憶",
       "default": "預設",
-      "custom": "自定義"
+      "custom": "自定義",
+      "description": "記憶功能讓您儲存和管理與助手互動的資訊。您可以新增、編輯和刪除記憶，也可以對它們進行篩選和搜尋。"
     }
   }
 }

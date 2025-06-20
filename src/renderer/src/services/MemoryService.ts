@@ -186,17 +186,27 @@ class MemoryService {
    * @returns Promise that resolves when configuration is updated
    */
   public async updateConfig(): Promise<void> {
-    const memoryConfig = selectMemoryConfig(store.getState())
-    const embedderProvider = memoryConfig.embedderModel ? getProviderByModel(memoryConfig.embedderModel) : undefined
-    const llmProvider = memoryConfig.llmModel ? getProviderByModel(memoryConfig.llmModel) : undefined
+    try {
+      if (!store || !store.getState) {
+        console.warn('Store not available, skipping memory config update')
+        return
+      }
 
-    const configWithProviders = {
-      ...memoryConfig,
-      embedderProvider,
-      llmProvider
+      const memoryConfig = selectMemoryConfig(store.getState())
+      const embedderProvider = memoryConfig.embedderModel ? getProviderByModel(memoryConfig.embedderModel) : undefined
+      const llmProvider = memoryConfig.llmModel ? getProviderByModel(memoryConfig.llmModel) : undefined
+
+      const configWithProviders = {
+        ...memoryConfig,
+        embedderProvider,
+        llmProvider
+      }
+
+      return window.api.memory.setConfig(configWithProviders)
+    } catch (error) {
+      console.warn('Failed to update memory config:', error)
+      return
     }
-
-    return window.api.memory.setConfig(configWithProviders)
   }
 }
 

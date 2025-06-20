@@ -2183,7 +2183,8 @@
       "delete_confirm_single": "确定要删除这条记忆吗？",
       "total_memories": "条记忆",
       "default": "默认",
-      "custom": "自定义"
+      "custom": "自定义",
+      "description": "记忆功能允许您存储和管理与助手交互的信息。您可以添加、编辑和删除记忆，也可以对它们进行过滤和搜索。"
     }
   }
 }
