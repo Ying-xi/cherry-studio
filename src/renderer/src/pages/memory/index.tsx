@@ -27,6 +27,7 @@ import {
   MenuProps,
   message,
   Modal,
+  Pagination,
   Row,
   Select,
   Space,
@@ -198,6 +199,27 @@ const EmptyStateContainer = styled.div`
 const LoadingContainer = styled.div`
   text-align: center;
   padding: 60px 20px;
+`
+
+const PaginationContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 32px;
+  padding: 24px 0;
+
+  .ant-pagination {
+    font-size: 14px;
+  }
+
+  .ant-pagination-item-active {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+
+    a {
+      color: white;
+    }
+  }
 `
 
 interface AddMemoryModalProps {
@@ -445,7 +467,7 @@ const MemoriesPage = () => {
   const dispatch = useDispatch()
   const currentUser = useSelector(selectCurrentUserId)
 
-  const [memories, setMemories] = useState<MemoryItem[]>([])
+  const [allMemories, setAllMemories] = useState<MemoryItem[]>([])
   const [loading, setLoading] = useState(false)
   const [searchText, setSearchText] = useState('')
   const [settingsModalVisible, setSettingsModalVisible] = useState(false)
@@ -454,6 +476,8 @@ const MemoriesPage = () => {
   const [addUserModalVisible, setAddUserModalVisible] = useState(false)
   const [form] = Form.useForm()
   const [uniqueUsers, setUniqueUsers] = useState<string[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const memoryService = MemoryService.getInstance()
 
   // Utility functions
@@ -480,7 +504,7 @@ const MemoriesPage = () => {
   const loadMemories = useCallback(
     async (userId?: string) => {
       const targetUser = userId || currentUser
-      console.log('Loading memories for user:', targetUser)
+      console.log('Loading all memories for user:', targetUser)
       setLoading(true)
       try {
         // First, ensure the memory service is using the correct user
@@ -489,10 +513,10 @@ const MemoriesPage = () => {
         // Load unique users efficiently from database
         await loadUniqueUsers()
 
-        // Get memories for current user context
-        const result = await memoryService.list({ limit: 1000 })
+        // Get all memories for current user context (load up to 10000)
+        const result = await memoryService.list({ limit: 10000, offset: 0 })
         console.log('Loaded memories for user:', targetUser, 'count:', result.results?.length || 0)
-        setMemories(result.results || [])
+        setAllMemories(result.results || [])
       } catch (error) {
         console.error('Failed to load memories:', error)
         message.error(t('memory.load_failed'))
@@ -506,27 +530,36 @@ const MemoriesPage = () => {
   // Sync memoryService with Redux store on mount and when currentUser changes
   useEffect(() => {
     console.log('useEffect triggered for currentUser:', currentUser)
+    // Reset to first page when user changes
+    setCurrentPage(1)
     loadMemories(currentUser)
-  }, [currentUser, loadMemories])
+  }, [currentUser]) // Removed loadMemories from dependencies to avoid infinite loop
 
-  // Initial load on mount
-  useEffect(() => {
-    console.log('Initial load on mount')
-    loadMemories()
-  }, [loadMemories])
-
-  // Filter memories based on search criteria (no user filter needed - already filtered by service)
-  const filteredMemories = memories.filter((memory) => {
+  // Filter memories based on search criteria
+  const filteredMemories = allMemories.filter((memory) => {
     // Search text filter
     if (searchText && !memory.memory.toLowerCase().includes(searchText.toLowerCase())) {
       return false
     }
-
     return true
   })
 
+  // Calculate paginated memories
+  const startIndex = (currentPage - 1) * pageSize
+  const endIndex = startIndex + pageSize
+  const paginatedMemories = filteredMemories.slice(startIndex, endIndex)
+
   const handleSearch = (value: string) => {
     setSearchText(value)
+    // Reset to first page when searching
+    setCurrentPage(1)
+  }
+
+  const handlePageChange = (page: number, size?: number) => {
+    setCurrentPage(page)
+    if (size && size !== pageSize) {
+      setPageSize(size)
+    }
   }
 
   const handleAddMemory = async (memory: string) => {
@@ -534,7 +567,9 @@ const MemoriesPage = () => {
       // The memory service will automatically use the current user from its state
       await memoryService.add(memory, {})
       message.success(t('memory.add_success'))
-      await loadMemories()
+      // Go to first page to see the newly added memory
+      setCurrentPage(1)
+      await loadMemories(currentUser)
     } catch (error) {
       console.error('Failed to add memory:', error)
       message.error(t('memory.add_failed'))
@@ -545,7 +580,8 @@ const MemoriesPage = () => {
     try {
       await memoryService.delete(id)
       message.success(t('memory.delete_success'))
-      await loadMemories()
+      // Reload all memories
+      await loadMemories(currentUser)
     } catch (error) {
       console.error('Failed to delete memory:', error)
       message.error(t('memory.delete_failed'))
@@ -561,7 +597,8 @@ const MemoriesPage = () => {
       await memoryService.update(id, memory, metadata)
       message.success(t('memory.update_success'))
       setEditingMemory(null)
-      await loadMemories()
+      // Reload all memories
+      await loadMemories(currentUser)
     } catch (error) {
       console.error('Failed to update memory:', error)
       message.error(t('memory.update_failed'))
@@ -576,6 +613,9 @@ const MemoriesPage = () => {
 
     // Clear current memories to show loading state immediately
     setMemories([])
+
+    // Reset pagination
+    setCurrentPage(1)
 
     try {
       // Explicitly load memories for the new user
@@ -645,7 +685,7 @@ const MemoriesPage = () => {
           if (currentUser === userId) {
             await handleUserSwitch('default-user')
           } else {
-            await loadMemories()
+            await loadMemories(currentUser)
           }
         } catch (error) {
           console.error('Failed to delete user:', error)
@@ -694,12 +734,12 @@ const MemoriesPage = () => {
         <EmptyStateContainer>
           <div className="empty-icon">📚</div>
           <div className="empty-title">
-            {memories.length === 0 ? t('memory.no_memories') : t('memory.no_matching_memories')}
+            {allMemories.length === 0 ? t('memory.no_memories') : t('memory.no_matching_memories')}
           </div>
           <div className="empty-description">
-            {memories.length === 0 ? t('memory.no_memories_description') : t('memory.try_different_filters')}
+            {allMemories.length === 0 ? t('memory.no_memories_description') : t('memory.try_different_filters')}
           </div>
-          {memories.length === 0 && (
+          {allMemories.length === 0 && (
             <Button type="primary" size="large" icon={<PlusOutlined />} onClick={() => setAddMemoryModalVisible(true)}>
               {t('memory.add_first_memory')}
             </Button>
@@ -710,7 +750,7 @@ const MemoriesPage = () => {
 
     return (
       <Row gutter={[24, 24]}>
-        {filteredMemories.map((memory) => (
+        {paginatedMemories.map((memory) => (
           <Col key={memory.id} xs={24} sm={24} md={12} lg={8}>
             <MemoryCard>
               <div className="memory-header">
@@ -752,7 +792,7 @@ const MemoriesPage = () => {
           <div className="header-left">
             <h1 className="header-title">{t('memory.memories')}</h1>
             <p className="header-subtitle">
-              {memories.length} {memories.length === 1 ? t('memory.memory') : t('memory.memories')} •{' '}
+              {allMemories.length} {allMemories.length === 1 ? t('memory.memory') : t('memory.memories')} •{' '}
               {getUserDisplayName(currentUser)}
             </p>
           </div>
@@ -809,7 +849,7 @@ const MemoriesPage = () => {
                     key: 'refresh',
                     label: t('common.refresh'),
                     icon: <ReloadOutlined />,
-                    onClick: () => loadMemories()
+                    onClick: () => loadMemories(currentUser)
                   },
                   ...(currentUser !== 'default-user'
                     ? [
@@ -849,6 +889,22 @@ const MemoriesPage = () => {
 
         {/* Memory Cards Section */}
         {renderMemoryCards()}
+
+        {/* Pagination */}
+        {!loading && filteredMemories.length > 0 && (
+          <PaginationContainer>
+            <Pagination
+              current={currentPage}
+              pageSize={pageSize}
+              total={filteredMemories.length}
+              onChange={handlePageChange}
+              showSizeChanger
+              showTotal={(total, range) => `${range[0]}-${range[1]} of ${total} memories`}
+              pageSizeOptions={['20', '50', '100', '200']}
+              defaultPageSize={50}
+            />
+          </PaginationContainer>
+        )}
 
         {/* Add Memory Modal */}
         <AddMemoryModal

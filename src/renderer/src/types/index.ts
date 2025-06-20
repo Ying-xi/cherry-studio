@@ -788,6 +788,7 @@ export interface MemoryHistoryItem {
 
 export interface MemoryListOptions extends MemoryEntity {
   limit?: number
+  offset?: number
 }
 
 export interface MemoryDeleteAllOptions extends MemoryEntity {}

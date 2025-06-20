@@ -299,8 +299,7 @@ export class MemoryService {
     await this.init()
     if (!this.db) throw new Error('Database not initialized')
 
-    const { userId, agentId, limit = 100 } = options
-    const offset = 0 // Default offset since it's not in MemoryListOptions
+    const { userId, agentId, limit = 100, offset = 0 } = options
 
     try {
       const conditions: string[] = ['m.is_deleted = 0']
