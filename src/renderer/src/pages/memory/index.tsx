@@ -612,7 +612,7 @@ const MemoriesPage = () => {
     dispatch(setCurrentUserId(userId))
 
     // Clear current memories to show loading state immediately
-    setMemories([])
+    setAllMemories([])
 
     // Reset pagination
     setCurrentPage(1)
