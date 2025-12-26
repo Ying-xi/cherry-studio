@@ -134,66 +134,68 @@ artifactBuildCompleted: scripts/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 1.7.2 - Stability & Enhancement Update
+    Cherry Studio 1.7.7 - New Models & UI Improvements
 
-    This release focuses on stability improvements, bug fixes, and quality-of-life enhancements.
+    This release adds new AI model support, OpenRouter integration, and UI redesigns.
 
-    🔧 Improvements
-    - Enhanced update dialog functionality and state management
-    - Improved ImageViewer context menu UX
-    - Better temperature and top_p parameter handling
-    - User-configurable stream options for OpenAI API
-    - Translation feature now supports document files
+    ✨ New Features
+    - [Models] Add GLM-4.7 and MiniMax-M2.1 model support
+    - [Provider] Add OpenRouter provider support
+    - [OVMS] Upgrade to 2025.4 with Qwen3-4B-int4-ov preset model
+    - [OVMS] Close OVMS process when app quits
+    - [Search] Show keyword-adjacent snippets in history search
+    - [Painting] Add extend_params support for DMX painting
+    - [UI] Add MCP logo and replace Hammer icon
 
-    🤖 AI & Models
-    - Added explicit thinking token support for Gemini 3 Pro Image
-    - Updated DeepSeek logic to match DeepSeek v3.2
-    - Updated AiOnly default models
-    - Updated AI model configurations to latest versions
-
-    ♿ Accessibility
-    - Improved screen reader (NVDA) support with aria-label attributes
-    - Added Slovak language support for spell check
+    🎨 UI Improvements
+    - [Notes] Move notes settings to popup in NotesPage for quick access
+    - [WebSearch] Redesign settings with two-column layout and "Set as Default" button
+    - [Display] Improve font selector for long font names
+    - [Transfer] Rename LanDrop to LanTransfer
 
     🐛 Bug Fixes
-    - Fixed Quick Assistant shortcut registration issue
-    - Fixed UI freeze on multi-file selection via batch processing
-    - Fixed assistant default model update when editing model capabilities
-    - Fixed provider handling and API key rotation logic
-    - Fixed OVMS API URL path formation
-    - Fixed custom parameters placement for Vercel AI Gateway
-    - Fixed topic message blocks clearing
-    - Fixed input bar blocking enter send while generating
+    - [API] Correct aihubmix Anthropic API path
+    - [OpenRouter] Support GPT-5.1/5.2 reasoning effort 'none' and improve error handling
+    - [Thinking] Fix interleaved thinking support
+    - [Memory] Fix retrieval issues and enable database backup
+    - [Settings] Update default assistant settings to disable temperature
+    - [OpenAI] Add persistent server configuration support
+    - [Azure] Normalize Azure endpoint
+    - [MCP] Check system npx/uvx before falling back to bundled binaries
+    - [Prompt] Improve language instruction clarity
+    - [Models] Include GPT5.2 series in verbosity check
+    - [URL] Enhance urlContext validation for supported providers and models
 
     <!--LANG:zh-CN-->
-    Cherry Studio 1.7.2 - 稳定性与功能增强更新
+    Cherry Studio 1.7.7 - 新模型与界面改进
 
-    本次更新专注于稳定性改进、问题修复和用户体验提升。
+    本次更新添加了新 AI 模型支持、OpenRouter 集成以及界面重新设计。
 
-    🔧 功能改进
-    - 增强更新对话框功能和状态管理
-    - 优化图片查看器右键菜单体验
-    - 改进温度和 top_p 参数处理逻辑
-    - 支持用户自定义 OpenAI API 流式选项
-    - 翻译功能现已支持文档文件
+    ✨ 新功能
+    - [模型] 添加 GLM-4.7 和 MiniMax-M2.1 模型支持
+    - [服务商] 添加 OpenRouter 服务商支持
+    - [OVMS] 升级至 2025.4，新增 Qwen3-4B-int4-ov 预设模型
+    - [OVMS] 应用退出时关闭 OVMS 进程
+    - [搜索] 历史搜索显示关键词上下文片段
+    - [绘图] DMX 绘图添加扩展参数支持
+    - [界面] 添加 MCP 图标并替换锤子图标
 
-    🤖 AI 与模型
-    - 为 Gemini 3 Pro Image 添加显式思考 token 支持
-    - 更新 DeepSeek 逻辑以适配 DeepSeek v3.2
-    - 更新 AiOnly 默认模型
-    - 更新 AI 模型配置至最新版本
-
-    ♿ 无障碍支持
-    - 改进屏幕阅读器 (NVDA) 支持，添加 aria-label 属性
-    - 新增斯洛伐克语拼写检查支持
+    🎨 界面改进
+    - [笔记] 将笔记设置移至笔记页弹窗，快速访问无需离开当前页面
+    - [网页搜索] 采用两栏布局重新设计设置界面，添加"设为默认"按钮
+    - [显示] 改进长字体名称的字体选择器
+    - [传输] LanDrop 重命名为 LanTransfer
 
     🐛 问题修复
-    - 修复快捷助手无法注册快捷键的问题
-    - 修复多文件选择时 UI 冻结问题（通过批处理优化）
-    - 修复编辑模型能力时助手默认模型更新问题
-    - 修复服务商处理和 API 密钥轮换逻辑
-    - 修复 OVMS API URL 路径格式问题
-    - 修复 Vercel AI Gateway 自定义参数位置问题
-    - 修复话题消息块清理问题
-    - 修复生成时输入框阻止回车发送的问题
+    - [API] 修复 aihubmix Anthropic API 路径
+    - [OpenRouter] 支持 GPT-5.1/5.2 reasoning effort 'none' 并改进错误处理
+    - [思考] 修复交错思考支持
+    - [记忆] 修复检索问题并启用数据库备份
+    - [设置] 更新默认助手设置禁用温度
+    - [OpenAI] 添加持久化服务器配置支持
+    - [Azure] 规范化 Azure 端点
+    - [MCP] 优先检查系统 npx/uvx 再回退到内置二进制文件
+    - [提示词] 改进语言指令清晰度
+    - [模型] GPT5.2 系列添加到 verbosity 检查
+    - [URL] 增强 urlContext 对支持的服务商和模型的验证
     <!--LANG:END-->

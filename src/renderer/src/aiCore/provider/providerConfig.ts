@@ -9,6 +9,7 @@ import {
 } from '@renderer/hooks/useAwsBedrock'
 import { createVertexProvider, isVertexAIConfigured } from '@renderer/hooks/useVertexAI'
 import { getProviderByModel } from '@renderer/services/AssistantService'
+import { getProviderById } from '@renderer/services/ProviderService'
 import store from '@renderer/store'
 import { isSystemProvider, type Model, type Provider, SystemProviderIds } from '@renderer/types'
 import type { OpenAICompletionsStreamOptions } from '@renderer/types/aiCoreTypes'
@@ -31,6 +32,7 @@ import {
   isSupportStreamOptionsProvider,
   isVertexProvider
 } from '@renderer/utils/provider'
+import { defaultAppHeaders } from '@shared/utils'
 import { cloneDeep, isEmpty } from 'lodash'
 
 import type { AiSdkConfig } from '../types'
@@ -196,18 +198,13 @@ export function providerToAiSdkConfig(actualProvider: Provider, model: Model): A
     extraOptions.mode = 'chat'
   }
 
-  // 添加额外headers
-  if (actualProvider.extra_headers) {
-    extraOptions.headers = actualProvider.extra_headers
-    // copy from openaiBaseClient/openaiResponseApiClient
-    if (aiSdkProviderId === 'openai') {
-      extraOptions.headers = {
-        ...extraOptions.headers,
-        'HTTP-Referer': 'https://cherry-ai.com',
-        'X-Title': 'Cherry Studio',
-        'X-Api-Key': baseConfig.apiKey
-      }
-    }
+  extraOptions.headers = {
+    ...defaultAppHeaders(),
+    ...actualProvider.extra_headers
+  }
+
+  if (aiSdkProviderId === 'openai') {
+    extraOptions.headers['X-Api-Key'] = baseConfig.apiKey
   }
   // azure
   // https://learn.microsoft.com/en-us/azure/ai-foundry/openai/latest
@@ -216,6 +213,15 @@ export function providerToAiSdkConfig(actualProvider: Provider, model: Model): A
     extraOptions.mode = 'responses'
   } else if (aiSdkProviderId === 'azure') {
     extraOptions.mode = 'chat'
+  }
+  if (isAzureOpenAIProvider(actualProvider)) {
+    const apiVersion = actualProvider.apiVersion?.trim()
+    if (apiVersion) {
+      extraOptions.apiVersion = apiVersion
+      if (!['preview', 'v1'].includes(apiVersion)) {
+        extraOptions.useDeploymentBasedUrls = true
+      }
+    }
   }
 
   // bedrock
@@ -249,6 +255,12 @@ export function providerToAiSdkConfig(actualProvider: Provider, model: Model): A
   if (aiSdkProviderId === 'cherryin') {
     if (model.endpoint_type) {
       extraOptions.endpointType = model.endpoint_type
+    }
+    // CherryIN API Host
+    const cherryinProvider = getProviderById(SystemProviderIds.cherryin)
+    if (cherryinProvider) {
+      extraOptions.anthropicBaseURL = cherryinProvider.anthropicApiHost + '/v1'
+      extraOptions.geminiBaseURL = cherryinProvider.apiHost + '/v1beta/models'
     }
   }
 
