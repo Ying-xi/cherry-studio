@@ -1,3 +1,19 @@
+/**
+ * @deprecated Scheduled for removal in v2.0.0
+ * --------------------------------------------------------------------------
+ * ⚠️ NOTICE: V2 DATA&UI REFACTORING (by 0xfullex)
+ * --------------------------------------------------------------------------
+ * STOP: Feature PRs affecting this file are currently BLOCKED.
+ * Only critical bug fixes are accepted during this migration phase.
+ *
+ * This file is being refactored to v2 standards.
+ * Any non-critical changes will conflict with the ongoing work.
+ *
+ * 🔗 Context & Status:
+ * - Contribution Hold: https://github.com/CherryHQ/cherry-studio/issues/10954
+ * - v2 Refactor PR   : https://github.com/CherryHQ/cherry-studio/pull/10162
+ * --------------------------------------------------------------------------
+ */
 import { loggerService } from '@logger'
 import { IpcChannel } from '@shared/IpcChannel'
 import type { WebDavConfig } from '@types'
@@ -11,6 +27,7 @@ import * as path from 'path'
 import type { CreateDirectoryOptions, FileStat } from 'webdav'
 
 import { getDataPath } from '../utils'
+import { closeAllDataConnections } from '../utils/lifecycle'
 import S3Storage from './S3Storage'
 import WebDav from './WebDav'
 import { windowService } from './WindowService'
@@ -392,6 +409,10 @@ class BackupManager {
         // 获取源目录总大小
         const totalSize = await this.getDirSize(sourcePath)
         let copiedSize = 0
+
+        // Close all database connections and file watchers before removing Data directory.
+        // On Windows, open file handles prevent deletion (EBUSY).
+        await closeAllDataConnections()
 
         await this.setWritableRecursive(destPath)
         await fs.remove(destPath)

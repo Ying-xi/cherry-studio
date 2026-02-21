@@ -3,7 +3,7 @@ import { type AnthropicProviderOptions } from '@ai-sdk/anthropic'
 import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google'
 import type { OpenAIResponsesProviderOptions } from '@ai-sdk/openai'
 import type { XaiProviderOptions } from '@ai-sdk/xai'
-import { baseProviderIdSchema, customProviderIdSchema } from '@cherrystudio/ai-core/provider'
+import { baseProviderIdSchema, customProviderIdSchema, hasProviderConfig } from '@cherrystudio/ai-core/provider'
 import { loggerService } from '@logger'
 import {
   getModelSupportedVerbosity,
@@ -580,8 +580,10 @@ function buildOllamaProviderOptions(
   const reasoningEffort = assistant.settings?.reasoning_effort
   if (enableReasoning) {
     if (isOpenAIOpenWeightModel(model)) {
-      // @ts-ignore upstream type error
-      providerOptions.think = reasoningEffort as any
+      // For gpt-oss models, Ollama accepts: 'low' | 'medium' | 'high'
+      if (reasoningEffort === 'low' || reasoningEffort === 'medium' || reasoningEffort === 'high') {
+        providerOptions.think = reasoningEffort
+      }
     } else {
       providerOptions.think = !['none', undefined].includes(reasoningEffort)
     }
@@ -614,9 +616,14 @@ function buildGenericProviderOptions(
   }
   if (enableReasoning) {
     if (isInterleavedThinkingModel(model)) {
-      providerOptions = {
-        ...providerOptions,
-        sendReasoning: true
+      // sendReasoning is a patch specific to @ai-sdk/openai-compatible
+      // Only apply when provider will actually use openai-compatible SDK
+      // (i.e., no dedicated SDK registered OR explicitly openai-compatible)
+      if (!hasProviderConfig(providerId) || providerId === 'openai-compatible') {
+        providerOptions = {
+          ...providerOptions,
+          sendReasoning: true
+        }
       }
     }
   }
@@ -644,6 +651,10 @@ function buildGenericProviderOptions(
     } else {
       throw new Error(t('translate.error.chat_qwen_mt'))
     }
+  }
+
+  if (isOpenAIModel(model)) {
+    providerOptions.strictJsonSchema = false
   }
 
   return {

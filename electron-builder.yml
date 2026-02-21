@@ -28,6 +28,12 @@ files:
   - "!**/{tsconfig.json,tsconfig.tsbuildinfo,tsconfig.node.json,tsconfig.web.json}"
   - "!**/{.editorconfig,.jekyll-metadata}"
   - "!src"
+  - "!config"
+  - "!patches"
+  - "!app-upgrade-config.json"
+  - "!**/node_modules/**/*.cpp"
+  - "!**/node_modules/node-addon-api/**"
+  - "!**/node_modules/prebuild-install/**"
   - "!scripts"
   - "!local"
   - "!docs"
@@ -67,11 +73,6 @@ asarUnpack:
   - "**/*.{metal,exp,lib}"
   - "node_modules/@img/sharp-libvips-*/**"
 
-# copy from node_modules/claude-code-plugins/plugins to resources/data/claude-code-pluginso
-extraResources:
-  - from: "./node_modules/claude-code-plugins/plugins/"
-    to: "claude-code-plugins"
-
 win:
   executableName: Cherry Studio
   artifactName: ${productName}-${version}-${arch}-setup.${ext}
@@ -90,6 +91,7 @@ nsis:
   oneClick: false
   include: build/nsis-installer.nsh
   buildUniversalInstaller: false
+  differentialPackage: false
 portable:
   artifactName: ${productName}-${version}-${arch}-portable.${ext}
   buildUniversalInstaller: false
@@ -105,8 +107,11 @@ mac:
   target:
     - target: dmg
     - target: zip
+dmg:
+  writeUpdateInfo: false
 linux:
   artifactName: ${productName}-${version}-${arch}.${ext}
+  executableName: CherryStudio
   target:
     - target: AppImage
     - target: deb
@@ -115,6 +120,7 @@ linux:
   category: Utility
   desktop:
     entry:
+      Name: Cherry Studio
       StartupWMClass: CherryStudio
   mimeTypes:
     - x-scheme-handler/cherrystudio
@@ -134,68 +140,28 @@ artifactBuildCompleted: scripts/artifact-build-completed.js
 releaseInfo:
   releaseNotes: |
     <!--LANG:en-->
-    Cherry Studio 1.7.7 - New Models & UI Improvements
-
-    This release adds new AI model support, OpenRouter integration, and UI redesigns.
-
-    ✨ New Features
-    - [Models] Add GLM-4.7 and MiniMax-M2.1 model support
-    - [Provider] Add OpenRouter provider support
-    - [OVMS] Upgrade to 2025.4 with Qwen3-4B-int4-ov preset model
-    - [OVMS] Close OVMS process when app quits
-    - [Search] Show keyword-adjacent snippets in history search
-    - [Painting] Add extend_params support for DMX painting
-    - [UI] Add MCP logo and replace Hammer icon
-
-    🎨 UI Improvements
-    - [Notes] Move notes settings to popup in NotesPage for quick access
-    - [WebSearch] Redesign settings with two-column layout and "Set as Default" button
-    - [Display] Improve font selector for long font names
-    - [Transfer] Rename LanDrop to LanTransfer
+    Cherry Studio 1.7.19 - Bug Fixes & Improvements
 
     🐛 Bug Fixes
-    - [API] Correct aihubmix Anthropic API path
-    - [OpenRouter] Support GPT-5.1/5.2 reasoning effort 'none' and improve error handling
-    - [Thinking] Fix interleaved thinking support
-    - [Memory] Fix retrieval issues and enable database backup
-    - [Settings] Update default assistant settings to disable temperature
-    - [OpenAI] Add persistent server configuration support
-    - [Azure] Normalize Azure endpoint
-    - [MCP] Check system npx/uvx before falling back to bundled binaries
-    - [Prompt] Improve language instruction clarity
-    - [Models] Include GPT5.2 series in verbosity check
-    - [URL] Enhance urlContext validation for supported providers and models
+    - [Settings] Fixed provider name input removing spaces during typing
+    - [Data] Fixed factory reset not clearing agents, memories, knowledge base and notes data
+    - [Data] Fixed backup restore failure on Windows (EBUSY error)
+    - [MCP] Fixed MCP tools returning images exceeding API message size limits
+
+    💄 Improvements
+    - [Agent] Improved settings popup UI with better permission mode selection
+    - [Models] Updated MiniMax models to the latest M2.x series
 
     <!--LANG:zh-CN-->
-    Cherry Studio 1.7.7 - 新模型与界面改进
-
-    本次更新添加了新 AI 模型支持、OpenRouter 集成以及界面重新设计。
-
-    ✨ 新功能
-    - [模型] 添加 GLM-4.7 和 MiniMax-M2.1 模型支持
-    - [服务商] 添加 OpenRouter 服务商支持
-    - [OVMS] 升级至 2025.4，新增 Qwen3-4B-int4-ov 预设模型
-    - [OVMS] 应用退出时关闭 OVMS 进程
-    - [搜索] 历史搜索显示关键词上下文片段
-    - [绘图] DMX 绘图添加扩展参数支持
-    - [界面] 添加 MCP 图标并替换锤子图标
-
-    🎨 界面改进
-    - [笔记] 将笔记设置移至笔记页弹窗，快速访问无需离开当前页面
-    - [网页搜索] 采用两栏布局重新设计设置界面，添加"设为默认"按钮
-    - [显示] 改进长字体名称的字体选择器
-    - [传输] LanDrop 重命名为 LanTransfer
+    Cherry Studio 1.7.19 - 问题修复与改进
 
     🐛 问题修复
-    - [API] 修复 aihubmix Anthropic API 路径
-    - [OpenRouter] 支持 GPT-5.1/5.2 reasoning effort 'none' 并改进错误处理
-    - [思考] 修复交错思考支持
-    - [记忆] 修复检索问题并启用数据库备份
-    - [设置] 更新默认助手设置禁用温度
-    - [OpenAI] 添加持久化服务器配置支持
-    - [Azure] 规范化 Azure 端点
-    - [MCP] 优先检查系统 npx/uvx 再回退到内置二进制文件
-    - [提示词] 改进语言指令清晰度
-    - [模型] GPT5.2 系列添加到 verbosity 检查
-    - [URL] 增强 urlContext 对支持的服务商和模型的验证
+    - [设置] 修复服务商名称输入时空格被立即移除的问题
+    - [数据] 修复重置数据时未清除智能体、记忆、知识库和笔记数据的问题
+    - [数据] 修复 Windows 上恢复备份失败的问题（EBUSY 错误）
+    - [MCP] 修复 MCP 工具返回图片时超出 API 消息大小限制的问题
+
+    💄 改进
+    - [智能体] 优化设置弹窗界面，改进权限模式选择体验
+    - [模型] 更新 MiniMax 模型至最新的 M2.x 系列
     <!--LANG:END-->

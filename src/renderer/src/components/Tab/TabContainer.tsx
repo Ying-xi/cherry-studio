@@ -2,13 +2,15 @@ import { PlusOutlined } from '@ant-design/icons'
 import { loggerService } from '@logger'
 import { Sortable, useDndReorder } from '@renderer/components/dnd'
 import HorizontalScrollContainer from '@renderer/components/HorizontalScrollContainer'
-import { isMac } from '@renderer/config/constant'
-import { DEFAULT_MIN_APPS } from '@renderer/config/minapps'
+import { isLinux, isMac } from '@renderer/config/constant'
+import { allMinApps } from '@renderer/config/minapps'
 import { useTheme } from '@renderer/context/ThemeProvider'
 import { useFullscreen } from '@renderer/hooks/useFullscreen'
 import { useMinappPopup } from '@renderer/hooks/useMinappPopup'
 import { useMinapps } from '@renderer/hooks/useMinapps'
+import { useSettings } from '@renderer/hooks/useSettings'
 import { getThemeModeLabel, getTitleLabel } from '@renderer/i18n/label'
+import UpdateAppButton from '@renderer/pages/home/components/UpdateAppButton'
 import tabsService from '@renderer/services/TabsService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
 import type { Tab } from '@renderer/store/tabs'
@@ -40,6 +42,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import MinAppIcon from '../Icons/MinAppIcon'
+import { OpenClawIcon } from '../Icons/SVGIcon'
 import MinAppTabsPool from '../MinApp/MinAppTabsPool'
 import WindowControls from '../WindowControls'
 
@@ -57,7 +60,7 @@ const getTabIcon = (
   // Check if it's a minapp tab (format: apps:appId)
   if (tabId.startsWith('apps:')) {
     const appId = tabId.replace('apps:', '')
-    let app = [...DEFAULT_MIN_APPS, ...minapps].find((app) => app.id === appId)
+    let app = [...allMinApps, ...minapps].find((app) => app.id === appId)
 
     // If not found in permanent apps, search in temporary apps cache
     // The cache stores apps opened via openSmartMinapp() for top navbar mode
@@ -104,6 +107,8 @@ const getTabIcon = (
       return <Settings size={14} />
     case 'code':
       return <Terminal size={14} />
+    case 'openclaw':
+      return <OpenClawIcon style={{ width: 14, height: 14 }} />
     default:
       return null
   }
@@ -122,6 +127,7 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
   const { settedTheme, toggleTheme } = useTheme()
   const { hideMinappPopup, minAppsCache } = useMinappPopup()
   const { minapps } = useMinapps()
+  const { useSystemTitleBar } = useSettings()
   const { t } = useTranslation()
 
   const getTabId = (path: string): string => {
@@ -138,7 +144,7 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
     // Check if it's a minapp tab
     if (tabId.startsWith('apps:')) {
       const appId = tabId.replace('apps:', '')
-      let app = [...DEFAULT_MIN_APPS, ...minapps].find((app) => app.id === appId)
+      let app = [...allMinApps, ...minapps].find((app) => app.id === appId)
 
       // If not found in permanent apps, search in temporary apps cache
       // This ensures temporary MinApps display proper titles while being used
@@ -268,7 +274,8 @@ const TabsContainer: React.FC<TabsContainerProps> = ({ children }) => {
             <PlusOutlined />
           </AddTabButton>
         </HorizontalScrollContainer>
-        <RightButtonsContainer>
+        <RightButtonsContainer style={{ paddingRight: isLinux && useSystemTitleBar ? '12px' : undefined }}>
+          <UpdateAppButton />
           <Tooltip
             title={t('settings.theme.title') + ': ' + getThemeModeLabel(settedTheme)}
             mouseEnterDelay={0.8}
