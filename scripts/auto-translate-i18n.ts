@@ -125,7 +125,7 @@ class ConcurrencyController {
       }
 
       if (this.running < this.maxConcurrent) {
-        execute()
+        void execute()
       } else {
         this.queue.push(execute)
       }
@@ -135,7 +135,7 @@ class ConcurrencyController {
   private processQueue() {
     if (this.queue.length > 0 && this.running < this.maxConcurrent) {
       const next = this.queue.shift()
-      if (next) next()
+      if (next) void next()
     }
   }
 }
@@ -153,7 +153,8 @@ const languageMap = {
   'fr-fr': 'French',
   'pt-pt': 'Portuguese',
   'de-de': 'German',
-  'ro-ro': 'Romanian'
+  'ro-ro': 'Romanian',
+  'vi-vn': 'Vietnamese'
 }
 
 const PROMPT = `
@@ -259,13 +260,25 @@ const countTranslatableStrings = (obj: I18N): number =>
 const main = async () => {
   validateConfig()
 
-  const localesDir = path.join(__dirname, '../src/renderer/src/i18n/locales')
-  const translateDir = path.join(__dirname, '../src/renderer/src/i18n/translate')
   const baseLocale = process.env.TRANSLATION_BASE_LOCALE ?? 'en-us'
   const baseFileName = `${baseLocale}.json`
-  const baseLocalePath = path.join(__dirname, '../src/renderer/src/i18n/locales', baseFileName)
-  if (!fs.existsSync(baseLocalePath)) {
-    throw new Error(`${baseLocalePath} not found.`)
+
+  // Renderer and main each own an independent catalog (locales/ + translate/); translate both.
+  const catalogs = [
+    {
+      localesDir: path.join(__dirname, '../src/renderer/i18n/locales'),
+      translateDir: path.join(__dirname, '../src/renderer/i18n/translate')
+    },
+    {
+      localesDir: path.join(__dirname, '../src/main/i18n/locales'),
+      translateDir: path.join(__dirname, '../src/main/i18n/translate')
+    }
+  ]
+  for (const { localesDir } of catalogs) {
+    const baseLocalePath = path.join(localesDir, baseFileName)
+    if (!fs.existsSync(baseLocalePath)) {
+      throw new Error(`${baseLocalePath} not found.`)
+    }
   }
 
   console.log(
@@ -283,9 +296,7 @@ const main = async () => {
         return file.endsWith('.json') && file !== baseFileName && !SCRIPT_CONFIG.SKIP_LANGUAGES.includes(filename)
       })
       .map((filename) => path.join(dir, filename))
-  const localeFiles = getFiles(localesDir)
-  const translateFiles = getFiles(translateDir)
-  const files = [...localeFiles, ...translateFiles]
+  const files = catalogs.flatMap(({ localesDir, translateDir }) => [...getFiles(localesDir), ...getFiles(translateDir)])
 
   console.info(`📂 Base Locale: ${baseLocale}`)
   console.info('📂 Files to translate:')
@@ -354,4 +365,4 @@ const main = async () => {
   console.log(`📈 Average time per file: ${avgDuration}s`)
 }
 
-main()
+void main()

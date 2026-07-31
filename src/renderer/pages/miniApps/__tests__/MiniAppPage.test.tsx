@@ -1,0 +1,234 @@
+// @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest'
+
+import type { MiniApp } from '@shared/data/types/miniApp'
+import { MockCacheUtils } from '@test-mocks/renderer/CacheService'
+import { MockUseCacheUtils } from '@test-mocks/renderer/useCache'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import MiniAppPage from '../MiniAppPage'
+
+const stubApp = (overrides: Partial<MiniApp> & Pick<MiniApp, 'appId' | 'name' | 'url'>): MiniApp => ({
+  appId: overrides.appId,
+  presetMiniAppId: overrides.presetMiniAppId ?? overrides.appId,
+  status: overrides.status ?? 'enabled',
+  orderKey: overrides.orderKey ?? 'a0',
+  name: overrides.name,
+  nameKey: overrides.nameKey,
+  url: overrides.url,
+  logo: overrides.logo ?? `${overrides.appId}-logo`,
+  bordered: overrides.bordered,
+  background: overrides.background,
+  supportedRegions: overrides.supportedRegions
+})
+
+const mocks = vi.hoisted(() => ({
+  appId: 'chatgpt',
+  allApps: [] as MiniApp[],
+  openedKeepAliveMiniApps: [] as MiniApp[],
+  openMiniAppKeepAlive: vi.fn(),
+  updateTab: vi.fn(),
+  isActiveTab: true,
+  currentTab: {
+    id: 'launchpad-tab',
+    type: 'route',
+    url: '/app/mini-app/chatgpt',
+    title: 'Launchpad',
+    icon: undefined
+  }
+}))
+
+vi.mock('@renderer/components/icons/LogoAvatar', () => ({
+  default: () => <div data-testid="logo-avatar" />
+}))
+
+vi.mock('@renderer/components/icons/SvgIcon', () => ({
+  OpenClawSidebarIcon: (props: React.ComponentProps<'svg'>) => <svg aria-hidden="true" {...props} />
+}))
+
+vi.mock('@renderer/pages/miniApps/components/MinimalToolbar', () => ({
+  default: () => <div data-testid="minimal-toolbar" />
+}))
+
+vi.mock('@renderer/pages/miniApps/components/WebviewSearch', () => ({
+  default: () => <div data-testid="webview-search" />
+}))
+
+vi.mock('@renderer/hooks/tab', () => ({
+  useCurrentTab: () => mocks.currentTab,
+  useCurrentTabId: () => mocks.currentTab.id,
+  useIsActiveTab: () => mocks.isActiveTab,
+  useOptionalTabsContext: () => ({
+    tabs: [mocks.currentTab],
+    updateTab: mocks.updateTab
+  })
+}))
+
+vi.mock('@renderer/hooks/useMiniAppPopup', () => ({
+  useMiniAppPopup: () => ({
+    openMiniAppKeepAlive: mocks.openMiniAppKeepAlive
+  }),
+  // Mirrors the real converter's transient-app convention.
+  toTransientMiniApp: (input: Record<string, unknown>) => ({
+    ...input,
+    presetMiniAppId: null,
+    status: 'enabled',
+    orderKey: ''
+  })
+}))
+
+vi.mock('@renderer/hooks/useMiniApps', () => ({
+  useMiniApps: () => ({
+    allApps: mocks.allApps,
+    openedKeepAliveMiniApps: mocks.openedKeepAliveMiniApps,
+    isLoading: false,
+    error: null
+  })
+}))
+
+vi.mock('@renderer/utils/webviewStateManager', () => ({
+  getWebviewLoaded: () => true,
+  onWebviewStateChange: () => vi.fn(),
+  setWebviewLoaded: vi.fn()
+}))
+
+vi.mock('@tanstack/react-router', () => ({
+  useParams: () => ({ appId: mocks.appId })
+}))
+
+vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: () => {} },
+  useTranslation: () => ({
+    t: (key: string) => key
+  })
+}))
+
+vi.mock('react-spinners/BeatLoader', () => ({
+  default: () => <div data-testid="beat-loader" />
+}))
+
+vi.mock('@renderer/components/Scrollbar', () => ({
+  default: ({ children }: { children: ReactNode }) => <div>{children}</div>
+}))
+
+describe('MiniAppPage', () => {
+  beforeEach(() => {
+    MockCacheUtils.resetMocks()
+    MockUseCacheUtils.resetMocks()
+    mocks.appId = 'chatgpt'
+    mocks.allApps = [
+      stubApp({
+        appId: 'chatgpt',
+        name: 'ChatGPT',
+        url: 'https://chat.openai.com',
+        logo: 'chat-logo'
+      })
+    ]
+    mocks.openedKeepAliveMiniApps = []
+    mocks.isActiveTab = true
+    mocks.currentTab = {
+      id: 'launchpad-tab',
+      type: 'route',
+      url: '/app/mini-app/chatgpt',
+      title: 'Launchpad',
+      icon: undefined
+    }
+    mocks.updateTab.mockClear()
+    mocks.openMiniAppKeepAlive.mockClear()
+    globalThis.CSS = { escape: (value: string) => value } as typeof CSS
+  })
+
+  afterEach(() => {
+    cleanup()
+    vi.clearAllMocks()
+  })
+
+  it('syncs the owning tab title and icon to the concrete mini app', async () => {
+    render(<MiniAppPage />)
+
+    await waitFor(() =>
+      expect(mocks.updateTab).toHaveBeenCalledWith('launchpad-tab', {
+        title: 'ChatGPT',
+        icon: 'chat-logo'
+      })
+    )
+    expect(mocks.openMiniAppKeepAlive).toHaveBeenCalledWith(mocks.allApps[0])
+  })
+
+  it('does not drive the keep-alive pool from a background (non-active) tab', async () => {
+    // A backgrounded mini-app page (e.g. a pinned mini-app tab still mounted via
+    // keep-alive) must not touch the global currentMiniAppId / LRU order — that
+    // is what ping-pongs two mounted pages into an infinite render loop.
+    mocks.isActiveTab = false
+
+    render(<MiniAppPage />)
+
+    await waitFor(() =>
+      expect(mocks.updateTab).toHaveBeenCalledWith('launchpad-tab', {
+        title: 'ChatGPT',
+        icon: 'chat-logo'
+      })
+    )
+    expect(mocks.openMiniAppKeepAlive).not.toHaveBeenCalled()
+  })
+
+  // A transient mini app (OpenClaw's dashboard and friends) has no database row and its
+  // keep-alive entry is per-window and LRU-evictable. This is the state a window is in
+  // after a tab is detached into it — and the state the main window is in when that tab
+  // is attached back after eviction. The shared registry is what resolves it in both.
+  it('resolves a transient mini app from the cross-window registry', async () => {
+    mocks.appId = 'openclaw-dashboard'
+    mocks.currentTab = {
+      id: 'detached-tab',
+      type: 'route',
+      url: '/app/mini-app/openclaw-dashboard',
+      title: 'OpenClaw',
+      icon: undefined
+    }
+    MockUseCacheUtils.setSharedCacheValue('mini_app.transient_descriptor.openclaw-dashboard', {
+      appId: 'openclaw-dashboard',
+      name: 'OpenClaw',
+      url: 'http://127.0.0.1:18790#token=secret',
+      logo: 'openclaw'
+    })
+
+    render(<MiniAppPage />)
+
+    await waitFor(() =>
+      expect(mocks.openMiniAppKeepAlive).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appId: 'openclaw-dashboard',
+          url: 'http://127.0.0.1:18790#token=secret',
+          // Pool bookkeeping is this window's own — reconstructed, never carried.
+          presetMiniAppId: null,
+          status: 'enabled',
+          orderKey: ''
+        })
+      )
+    )
+    expect(screen.queryByText('miniApp.error.not_found')).not.toBeInTheDocument()
+  })
+
+  it('renders not-found when neither the database nor the registry knows the app', async () => {
+    mocks.appId = 'ghost-app'
+
+    render(<MiniAppPage />)
+
+    await waitFor(() => expect(screen.getByText('miniApp.error.not_found')).toBeInTheDocument())
+    expect(mocks.openMiniAppKeepAlive).not.toHaveBeenCalled()
+  })
+
+  it('keeps loading instead of flashing not-found until the shared cache has hydrated', async () => {
+    // The shared cache syncs from Main asynchronously and does not block renderer
+    // startup, so a freshly detached window renders before the descriptor is readable.
+    mocks.appId = 'openclaw-dashboard'
+    MockCacheUtils.setSharedCacheReady(false)
+
+    render(<MiniAppPage />)
+
+    await waitFor(() => expect(screen.getByTestId('beat-loader')).toBeInTheDocument())
+    expect(screen.queryByText('miniApp.error.not_found')).not.toBeInTheDocument()
+  })
+})

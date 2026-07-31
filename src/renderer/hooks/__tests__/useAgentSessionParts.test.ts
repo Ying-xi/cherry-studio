@@ -1,0 +1,182 @@
+import type { AgentSessionMessageEntity } from '@shared/data/types/agent'
+import { MockUseCacheUtils } from '@test-mocks/renderer/useCache'
+import { renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const dataApiMocks = vi.hoisted(() => ({
+  useDataChange: vi.fn(),
+  useInfiniteFlatItems: vi.fn(),
+  useInfiniteQuery: vi.fn(),
+  useMutation: vi.fn()
+}))
+
+vi.mock('@renderer/data/hooks/useDataApi', () => ({
+  useDataChange: dataApiMocks.useDataChange,
+  useInfiniteFlatItems: dataApiMocks.useInfiniteFlatItems,
+  useInfiniteQuery: dataApiMocks.useInfiniteQuery,
+  useMutation: dataApiMocks.useMutation
+}))
+
+const { toAgentSessionUIMessage, useAgentSessionParts } = await import('../useAgentSessionParts')
+
+function mockAgentSessionPartsDataApi(pages: Array<{ items: AgentSessionMessageEntity[]; nextCursor?: string }> = []) {
+  dataApiMocks.useInfiniteQuery.mockReturnValue({
+    pages,
+    isLoading: false,
+    isRefreshing: false,
+    hasNext: false,
+    loadNext: vi.fn(),
+    mutate: vi.fn()
+  })
+  dataApiMocks.useInfiniteFlatItems.mockReturnValue(pages.flatMap((page) => page.items))
+  dataApiMocks.useMutation.mockReturnValue({ trigger: vi.fn() })
+}
+
+describe('toAgentSessionUIMessage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    MockUseCacheUtils.resetMocks()
+    mockAgentSessionPartsDataApi()
+  })
+
+  it('projects the flattened agent session message row from data.parts', () => {
+    const row = {
+      id: 'message-1',
+      sessionId: 'session-1',
+      role: 'assistant',
+      data: { parts: [{ type: 'text', text: 'from parts' }] },
+      searchableText: 'from parts',
+      status: 'success',
+      modelId: 'anthropic::claude',
+      messageSnapshot: {
+        id: 'ag1',
+        name: 'Agent',
+        model: { id: 'claude', name: 'Claude', provider: 'anthropic' }
+      },
+      stats: { totalTokens: 10 },
+      runtimeResumeToken: 'agent-session-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:01.000Z'
+    } as AgentSessionMessageEntity
+
+    expect(toAgentSessionUIMessage(row)).toMatchObject({
+      id: 'message-1',
+      role: 'assistant',
+      parts: [{ type: 'text', text: 'from parts' }],
+      metadata: {
+        createdAt: '2026-01-01T00:00:00.000Z',
+        status: 'success',
+        modelId: 'anthropic::claude',
+        messageSnapshot: {
+          id: 'ag1',
+          name: 'Agent',
+          model: { id: 'claude', name: 'Claude', provider: 'anthropic' }
+        },
+        stats: { totalTokens: 10 }
+      }
+    })
+  })
+})
+
+describe('useAgentSessionParts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockAgentSessionPartsDataApi()
+  })
+
+  it('does not reuse messages from the previous session while the session key changes', () => {
+    renderHook(() => useAgentSessionParts('session-1'))
+
+    expect(dataApiMocks.useInfiniteQuery).toHaveBeenCalledWith(
+      '/agent-sessions/:sessionId/messages',
+      expect.objectContaining({
+        params: { sessionId: 'session-1' },
+        swrOptions: expect.objectContaining({
+          keepPreviousData: false
+        })
+      })
+    )
+  })
+
+  it('can suppress mount revalidation during a temporary handoff', () => {
+    renderHook(() => useAgentSessionParts('session-1', { enabled: true, fetchOnMount: false }))
+
+    expect(dataApiMocks.useInfiniteQuery).toHaveBeenCalledWith(
+      '/agent-sessions/:sessionId/messages',
+      expect.objectContaining({
+        params: { sessionId: 'session-1' },
+        swrOptions: expect.objectContaining({
+          revalidateIfStale: false,
+          revalidateOnMount: false
+        })
+      })
+    )
+  })
+
+  it('refreshes mounted history when main persists a background approval interaction', () => {
+    const mutate = vi.fn()
+    dataApiMocks.useInfiniteQuery.mockReturnValue({
+      pages: [],
+      isLoading: false,
+      isRefreshing: false,
+      hasNext: false,
+      loadNext: vi.fn(),
+      mutate
+    })
+
+    renderHook(() => useAgentSessionParts('session-1'))
+    expect(dataApiMocks.useDataChange).toHaveBeenCalledWith('/agent-sessions/:sessionId/messages', expect.any(Function))
+
+    const listener = dataApiMocks.useDataChange.mock.calls.at(-1)?.[1] as (() => void) | undefined
+    listener?.()
+    expect(mutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('overlays live background-agent flow parts onto the original assistant row', () => {
+    const row = {
+      id: 'message-1',
+      sessionId: 'session-1',
+      role: 'assistant',
+      data: {
+        parts: [
+          {
+            type: 'tool-Agent',
+            toolCallId: 'task-root',
+            state: 'input-available',
+            input: { prompt: 'Audit' }
+          }
+        ]
+      },
+      searchableText: '',
+      status: 'success',
+      modelId: null,
+      messageSnapshot: null,
+      stats: null,
+      runtimeResumeToken: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z'
+    } as AgentSessionMessageEntity
+    mockAgentSessionPartsDataApi([{ items: [row] }])
+    MockUseCacheUtils.setSharedCacheValue('agent.session.flow_parts.session-1', {
+      'message-1': [
+        ...(row.data.parts ?? []),
+        {
+          type: 'text',
+          text: 'Subagent finished',
+          providerMetadata: { cherry: { parentToolCallId: 'task-root' } }
+        }
+      ]
+    })
+
+    const { result } = renderHook(() => useAgentSessionParts('session-1'))
+
+    expect(result.current.messages[0].parts).toEqual([
+      expect.objectContaining({ toolCallId: 'task-root' }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'Subagent finished',
+        providerMetadata: { cherry: { parentToolCallId: 'task-root' } }
+      })
+    ])
+  })
+})

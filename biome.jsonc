@@ -14,7 +14,7 @@
       }
     },
     "enabled": true,
-    "includes": ["**/*.json", "!*.json", "!**/package.json", "!coverage/**"]
+    "includes": ["**/*.json", "!**/package.json", "!coverage/**"]
   },
   "css": {
     "formatter": {
@@ -23,7 +23,16 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!**/.claude/**", "!**/.vscode/**", "!**/.conductor/**"],
+    "includes": [
+      "**",
+      "!**/.claude/**",
+      "!**/.vscode/**",
+      "!**/.conductor/**",
+      "!v2-refactor-temp/**",
+      "!resources/**",
+      "!**/storybook-static/**",
+      "!**/dist/**"
+    ],
     "maxSize": 2097152
   },
   "formatter": {
@@ -42,16 +51,19 @@
       "!.github/**",
       "!.husky/**",
       "!.vscode/**",
+      "!.claude/**",
       "!*.yaml",
       "!*.yml",
       "!*.mjs",
       "!*.cjs",
       "!*.md",
-      "!*.json",
       "!src/main/integration/**",
+      "!src/main/services/nutstore/sso/lib/**",
       "!**/tailwind.css",
       "!**/package.json",
-      "!.zed/**"
+      "!src/renderer/routeTree.gen.ts",
+      "!.zed/**",
+      "!v2-refactor-temp/**"
     ],
     "indentStyle": "space",
     "indentWidth": 2,
@@ -81,7 +93,12 @@
   },
   "linter": {
     "enabled": true,
-    "includes": ["!**/tailwind.css", "src/renderer/**/*.{tsx,ts}"],
+    "includes": [
+      "!**/tailwind.css",
+      "!src/renderer/routeTree.gen.ts",
+      "!v2-refactor-temp/**",
+      "src/renderer/**/*.{tsx,ts}"
+    ],
     // only enable sorted tailwind css rule. used as formatter instead of linter
     "rules": {
       "nursery": {
